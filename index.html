@@ -1,0 +1,2409 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Aspen Spas — Invoice Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root {
+  --bg: #FAFAF9;
+  --bg-soft: #F4F4F5;
+  --bg-card: #FFFFFF;
+  --bg-elev: #FFFFFF;
+  --text: #18181B;
+  --text-soft: #52525B;
+  --text-mute: #A1A1AA;
+  --border: #E4E4E7;
+  --border-soft: #F1F1F2;
+  --primary: #0F172A;
+  --accent: #0369A1;
+  --accent-soft: #E0F2FE;
+  --pending: #DC2626;
+  --pending-bg: #FEF2F2;
+  --sent: #16A34A;
+  --sent-bg: #F0FDF4;
+  --paid: #2563EB;
+  --paid-bg: #EFF6FF;
+  --followup: #D97706;
+  --followup-bg: #FFFBEB;
+  --shadow-xs: 0 1px 1px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.06);
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+input[type="text"], input[type="email"], input[type="number"], input[type="date"], select, textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-card);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+textarea { resize: vertical; min-height: 80px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-mute); }
+
+/* APP LAYOUT */
+.app { max-width: 1400px; margin: 0 auto; padding: 32px 24px; }
+
+/* HEADER */
+.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; gap: 24px; flex-wrap: wrap; }
+.brand { display: flex; flex-direction: column; gap: 4px; }
+.brand-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--primary); }
+.brand-sub { font-size: 12px; color: var(--text-mute); font-weight: 500; }
+.brand-mark { display: inline-flex; align-items: center; gap: 8px; }
+.brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.connection-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-soft); padding: 6px 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px; }
+.connection-dot { width: 6px; height: 6px; border-radius: 50%; background: #94A3B8; transition: background 0.3s ease; }
+.connection-dot.connected { background: var(--sent); animation: pulse 2s infinite; }
+.connection-dot.error { background: var(--pending); }
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(22,163,74,0); }
+}
+
+/* STATS GRID */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-xs);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.stat-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-mute); font-weight: 600; }
+.stat-value { font-size: 26px; font-weight: 700; color: var(--text); margin-top: 6px; letter-spacing: -0.02em; line-height: 1.1; }
+.stat-meta { font-size: 11px; color: var(--text-soft); margin-top: 4px; }
+.stat-card.alert { background: var(--pending-bg); border-color: rgba(220,38,38,0.2); }
+.stat-card.alert .stat-value { color: var(--pending); }
+.stat-card.warn { background: var(--followup-bg); border-color: rgba(217,119,6,0.2); }
+.stat-card.warn .stat-value { color: var(--followup); }
+
+/* ALERTS BAR */
+.alerts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.alert-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid;
+}
+.alert-row.red { background: var(--pending-bg); border-color: rgba(220,38,38,0.2); color: var(--pending); }
+.alert-row.amber { background: var(--followup-bg); border-color: rgba(217,119,6,0.2); color: var(--followup); }
+.alert-icon { font-size: 14px; }
+
+/* TOOLBAR */
+.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.search-box { position: relative; flex: 1; min-width: 240px; max-width: 360px; }
+.search-box input { padding-left: 36px; }
+.search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-mute); font-size: 14px; pointer-events: none; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: var(--r-md);
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+.btn-primary:hover { background: #1e293b; transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn-secondary { background: var(--bg-card); color: var(--text); border-color: var(--border); }
+.btn-secondary:hover { background: var(--bg-soft); border-color: var(--text-mute); }
+.btn-ghost { background: transparent; color: var(--text-soft); }
+.btn-ghost:hover { background: var(--bg-soft); color: var(--text); }
+.btn-danger { background: var(--pending-bg); color: var(--pending); }
+.btn-danger:hover { background: var(--pending); color: white; }
+.btn-success { background: var(--sent); color: white; }
+.btn-success:hover { background: #15803d; }
+.btn-sm { padding: 6px 10px; font-size: 12px; }
+.btn-lg { padding: 12px 20px; font-size: 14px; }
+.btn-icon { padding: 8px; }
+
+/* TABS */
+.tabs { display: flex; gap: 2px; background: var(--bg-soft); padding: 4px; border-radius: var(--r-md); margin-bottom: 16px; overflow-x: auto; }
+.tab {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-soft);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.tab:hover { color: var(--text); }
+.tab.active { background: var(--bg-card); color: var(--text); box-shadow: var(--shadow-xs); }
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-soft);
+  color: var(--text-soft);
+}
+.tab.active .tab-count { background: var(--primary); color: white; }
+.tab.tab-pending .tab-count { background: var(--pending); color: white; }
+.tab.tab-followup .tab-count { background: var(--followup); color: white; }
+
+/* INVOICE LIST */
+.invoice-list { display: flex; flex-direction: column; gap: 10px; }
+.invoice-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 16px;
+  align-items: center;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.invoice-card:hover { border-color: var(--text-mute); box-shadow: var(--shadow-sm); }
+.invoice-card.urgent { border-left: 3px solid var(--pending); }
+.invoice-card.warn { border-left: 3px solid var(--followup); }
+
+.invoice-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.invoice-status.pending { background: var(--pending); box-shadow: 0 0 0 3px var(--pending-bg); }
+.invoice-status.sent { background: var(--sent); box-shadow: 0 0 0 3px var(--sent-bg); }
+.invoice-status.paid { background: var(--paid); box-shadow: 0 0 0 3px var(--paid-bg); }
+.invoice-status.followup { background: var(--followup); box-shadow: 0 0 0 3px var(--followup-bg); }
+
+.invoice-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.invoice-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.invoice-num { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 13px; color: var(--text); padding: 2px 8px; background: var(--bg-soft); border-radius: 6px; }
+.invoice-customer { font-weight: 600; font-size: 14px; color: var(--text); }
+.invoice-meta { display: flex; gap: 14px; font-size: 12px; color: var(--text-soft); flex-wrap: wrap; }
+.invoice-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.invoice-amount { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 16px; color: var(--text); }
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.status-badge.pending { background: var(--pending-bg); color: var(--pending); }
+.status-badge.sent { background: var(--sent-bg); color: var(--sent); }
+.status-badge.paid { background: var(--paid-bg); color: var(--paid); }
+.status-badge.followup { background: var(--followup-bg); color: var(--followup); }
+.status-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.invoice-actions { display: flex; gap: 6px; align-items: center; }
+
+/* EMPTY STATE */
+.empty {
+  text-align: center;
+  padding: 64px 24px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-lg);
+}
+.empty-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+.empty-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.empty-text { font-size: 13px; color: var(--text-soft); max-width: 360px; margin: 0 auto 20px; }
+
+/* MODAL */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 100;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  overflow-y: auto;
+  animation: fadeIn 0.15s ease;
+}
+.modal-backdrop.open { display: flex; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  background: var(--bg-card);
+  border-radius: var(--r-xl);
+  width: 100%;
+  max-width: 560px;
+  box-shadow: var(--shadow-lg);
+  animation: slideUp 0.2s ease;
+}
+.modal.modal-lg { max-width: 700px; }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.modal-title { font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+.modal-close {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  font-size: 18px; color: var(--text-mute);
+  transition: all 0.15s ease;
+}
+.modal-close:hover { background: var(--bg-soft); color: var(--text); }
+.modal-body { padding: 24px; max-height: 70vh; overflow-y: auto; }
+.modal-footer {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg-soft);
+  border-radius: 0 0 var(--r-xl) var(--r-xl);
+}
+
+/* FORM */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-grid .full { grid-column: 1 / -1; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: 12px; font-weight: 600; color: var(--text-soft); }
+.field label .req { color: var(--pending); }
+.field-hint { font-size: 11px; color: var(--text-mute); margin-top: 2px; }
+
+/* SEND PREVIEW */
+.send-step { 
+  display: flex; gap: 12px; padding: 12px 14px;
+  background: var(--bg-soft);
+  border-radius: var(--r-md);
+  margin-bottom: 8px;
+  font-size: 13px;
+  align-items: flex-start;
+}
+.send-step-num {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  background: var(--primary); color: white;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+}
+.send-step-text { color: var(--text); line-height: 1.5; padding-top: 1px; }
+.send-step-text strong { color: var(--text); }
+
+.email-preview {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 16px;
+  margin: 16px 0;
+  font-size: 13px;
+}
+.email-preview-row { display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--border-soft); }
+.email-preview-row:last-child { border-bottom: none; }
+.email-preview-label { width: 70px; font-weight: 600; color: var(--text-soft); flex-shrink: 0; }
+.email-preview-value { color: var(--text); word-break: break-word; }
+.email-body-preview {
+  white-space: pre-wrap;
+  background: white;
+  padding: 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-soft);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+/* TOAST */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--primary);
+  color: white;
+  padding: 12px 18px;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow-lg);
+  transform: translateY(20px);
+  opacity: 0;
+  transition: all 0.25s ease;
+  z-index: 200;
+  max-width: 340px;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { background: var(--sent); }
+.toast.error { background: var(--pending); }
+
+/* SETUP NEEDED */
+.setup-banner {
+  background: var(--followup-bg);
+  border: 1px solid rgba(217,119,6,0.2);
+  border-radius: var(--r-lg);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.setup-banner-text { flex: 1; font-size: 13px; color: var(--text); }
+.setup-banner-text strong { color: var(--followup); }
+
+/* AUTOCOMPLETE */
+.autocomplete-wrap { position: relative; }
+.autocomplete-list {
+  position: absolute;
+  top: 100%; left: 0; right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 10;
+  margin-top: 4px;
+  display: none;
+}
+.autocomplete-list.open { display: block; }
+.autocomplete-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.autocomplete-item:last-child { border-bottom: none; }
+.autocomplete-item:hover, .autocomplete-item.active { background: var(--accent-soft); }
+.autocomplete-item-name { font-weight: 600; color: var(--text); }
+.autocomplete-item-meta { font-size: 11px; color: var(--text-soft); }
+
+/* PDF UPLOAD ZONE */
+.pdf-upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--r-lg);
+  padding: 24px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: var(--bg-soft);
+  margin-bottom: 20px;
+}
+.pdf-upload-zone:hover { border-color: var(--accent); background: var(--accent-soft); }
+.pdf-upload-zone.has-file { border-style: solid; border-color: var(--sent); background: var(--sent-bg); }
+.pdf-upload-zone.processing { border-color: var(--accent); background: var(--accent-soft); }
+.pdf-upload-icon { font-size: 28px; margin-bottom: 6px; }
+.pdf-upload-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.pdf-upload-sub { font-size: 12px; color: var(--text-soft); }
+.pdf-upload-input { display: none; }
+.pdf-file-info {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  margin-bottom: 14px;
+}
+.pdf-file-info-icon { font-size: 22px; flex-shrink: 0; }
+.pdf-file-info-main { flex: 1; min-width: 0; }
+.pdf-file-info-name { font-weight: 600; font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pdf-file-info-size { font-size: 11px; color: var(--text-mute); }
+.pdf-file-info-remove {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; color: var(--text-mute);
+  flex-shrink: 0;
+}
+.pdf-file-info-remove:hover { background: var(--pending-bg); color: var(--pending); }
+.pdf-extracted-banner {
+  background: var(--sent-bg); border: 1px solid rgba(22,163,74,0.2);
+  color: var(--sent); padding: 8px 12px; border-radius: var(--r-md);
+  font-size: 12px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+}
+
+/* HEADER ICON BUTTONS */
+.header-actions { display: flex; gap: 8px; align-items: center; }
+.icon-btn {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 999px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-soft);
+  font-size: 16px;
+  transition: all 0.15s ease;
+}
+.icon-btn:hover { background: var(--bg-soft); color: var(--text); border-color: var(--text-mute); }
+.autocomplete-list.open { display: block; }
+.autocomplete-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.autocomplete-item:last-child { border-bottom: none; }
+.autocomplete-item:hover, .autocomplete-item.active { background: var(--accent-soft); }
+.autocomplete-item-name { font-weight: 600; color: var(--text); }
+.autocomplete-item-meta { font-size: 11px; color: var(--text-soft); }
+
+/* CUSTOMER CARD (in Clientes tab) */
+.customer-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.15s ease;
+}
+.customer-card:hover { border-color: var(--text-mute); box-shadow: var(--shadow-sm); }
+.customer-info { flex: 1; min-width: 0; }
+.customer-name { font-weight: 600; font-size: 14px; color: var(--text); margin-bottom: 4px; }
+.customer-meta { font-size: 12px; color: var(--text-soft); display: flex; gap: 12px; flex-wrap: wrap; }
+.customer-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.customer-stats { display: flex; gap: 10px; font-size: 11px; color: var(--text-mute); margin-top: 4px; }
+.customer-stats span { padding: 2px 8px; background: var(--bg-soft); border-radius: 4px; }
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .invoice-card { grid-template-columns: 1fr; gap: 12px; }
+  .invoice-actions { justify-content: flex-end; }
+  .form-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .app { padding: 20px 14px; }
+  .stat-value { font-size: 22px; }
+  .header { gap: 12px; }
+  .modal-body { padding: 18px; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="brand">
+      <div class="brand-mark">
+        <span class="brand-dot"></span>
+        <span class="brand-title">Invoice Tracker</span>
+      </div>
+      <span class="brand-sub">Aspen Spas · service1@aspenspas.com</span>
+    </div>
+    <div class="header-actions">
+      <div class="connection-status">
+        <span class="connection-dot" id="connDot"></span>
+        <span id="connText">Conectando…</span>
+      </div>
+      <button class="icon-btn" onclick="openSettingsModal()" title="Configuración">⚙</button>
+    </div>
+  </header>
+
+  <!-- SETUP BANNER (shown if Firebase config not set) -->
+  <div class="setup-banner" id="setupBanner" style="display:none;">
+    <div class="setup-banner-text">
+      <strong>Configuración pendiente:</strong> Edita el archivo HTML y reemplaza el bloque <code>FIREBASE_CONFIG</code> con las credenciales de tu proyecto Firebase. Mientras tanto los datos se guardan solo en este navegador.
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat-card alert" id="statPending">
+      <div class="stat-label">Pendientes envío</div>
+      <div class="stat-value" id="cntPending">0</div>
+      <div class="stat-meta" id="cntPendingMeta">—</div>
+    </div>
+    <div class="stat-card warn" id="statFollowup">
+      <div class="stat-label">Por cobrar</div>
+      <div class="stat-value" id="cntFollowup">0</div>
+      <div class="stat-meta" id="cntFollowupMeta">+7 días sin pago</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Enviadas este mes</div>
+      <div class="stat-value" id="cntSentMonth">0</div>
+      <div class="stat-meta" id="cntSentMonthAmt">$0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Cobradas este mes</div>
+      <div class="stat-value" id="cntPaidMonth">0</div>
+      <div class="stat-meta" id="cntPaidMonthAmt">$0</div>
+    </div>
+  </div>
+
+  <!-- ALERTS -->
+  <div class="alerts" id="alertsBox"></div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="search-box">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="searchInput" placeholder="Buscar por cliente, factura, email…">
+    </div>
+    <button class="btn btn-secondary" onclick="exportCSV()">Exportar CSV</button>
+    <button class="btn btn-primary btn-lg" onclick="openAddModal()">+ Nueva Factura</button>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-filter="all">Todas <span class="tab-count" id="cntAll">0</span></button>
+    <button class="tab tab-pending" data-filter="pending">Pendientes <span class="tab-count" id="cntPendingTab">0</span></button>
+    <button class="tab tab-followup" data-filter="followup">Por cobrar <span class="tab-count" id="cntFollowupTab">0</span></button>
+    <button class="tab" data-filter="sent">Enviadas <span class="tab-count" id="cntSentTab">0</span></button>
+    <button class="tab" data-filter="paid">Pagadas <span class="tab-count" id="cntPaidTab">0</span></button>
+    <button class="tab" data-filter="customers">👥 Clientes <span class="tab-count" id="cntCustomersTab">0</span></button>
+  </div>
+
+  <!-- INVOICE LIST -->
+  <div class="invoice-list" id="invoiceList"></div>
+
+  <!-- CUSTOMER LIST (oculto por default, se muestra en pestaña Clientes) -->
+  <div id="customerView" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <span style="font-size:13px; color:var(--text-soft); font-weight:500;">Tu lista de clientes — se llena automáticamente al facturar</span>
+      <button class="btn btn-primary btn-sm" onclick="openAddCustomerModal()">+ Agregar cliente</button>
+    </div>
+    <div class="invoice-list" id="customerList"></div>
+  </div>
+
+</div>
+
+<!-- ADD/EDIT MODAL -->
+<div class="modal-backdrop" id="formModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="formTitle">Nueva factura</span>
+      <button class="modal-close" onclick="closeModal('formModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <!-- PDF UPLOAD ZONE -->
+      <div class="pdf-upload-zone" id="pdfDropZone" onclick="document.getElementById('pdfFileInput').click()">
+        <div class="pdf-upload-icon">📄</div>
+        <div class="pdf-upload-title">Subir PDF de la factura de QuickBooks</div>
+        <div class="pdf-upload-sub">Auto-extrae número, cliente, monto, fecha · Click o arrastra el PDF aquí</div>
+        <input type="file" id="pdfFileInput" class="pdf-upload-input" accept="application/pdf" onchange="handlePdfUpload(event)">
+      </div>
+      
+      <!-- PDF FILE INFO (shown after upload) -->
+      <div id="pdfFileInfo" style="display:none;"></div>
+      
+      <!-- EXTRACTION BANNER -->
+      <div id="extractedBanner" style="display:none;"></div>
+      
+      <div class="form-grid">
+        <div class="field">
+          <label>Número de factura <span class="req">*</span></label>
+          <input type="text" id="fInvoiceNumber" placeholder="Ej. 271176" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Monto <span class="req">*</span></label>
+          <input type="number" id="fAmount" step="0.01" placeholder="0.00">
+        </div>
+        <div class="field full">
+          <label>Cliente (nombre completo) <span class="req">*</span></label>
+          <div class="autocomplete-wrap">
+            <input type="text" id="fCustomerName" placeholder="Empieza a escribir para buscar..." autocomplete="off" oninput="onCustomerInput(event)" onfocus="onCustomerInput(event)" onblur="setTimeout(()=>document.getElementById('customerSuggestions').classList.remove('open'),200)">
+            <div class="autocomplete-list" id="customerSuggestions"></div>
+          </div>
+          <span class="field-hint">Si el cliente ya existe, lo seleccionas y se autocompletan email, modelo, serial</span>
+        </div>
+        <div class="field">
+          <label>Nombre para saludo (Hi ___,)</label>
+          <input type="text" id="fGreetingName" placeholder="Auto desde nombre completo" autocomplete="off">
+          <span class="field-hint">Vacío = se autocompleta</span>
+        </div>
+        <div class="field">
+          <label>Email del cliente <span class="req">*</span></label>
+          <input type="email" id="fCustomerEmail" placeholder="cliente@email.com" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Fecha de servicio</label>
+          <input type="date" id="fServiceDate">
+        </div>
+        <div class="field">
+          <label>Técnico</label>
+          <select id="fTechnician">
+            <option value="">—</option>
+            <option>Jeremy</option>
+            <option>Robert</option>
+            <option>Pedro</option>
+            <option>Jarred</option>
+            <option>Fernando</option>
+          </select>
+        </div>
+        <div class="field full">
+          <label>Descripción del servicio</label>
+          <input type="text" id="fServiceDesc" placeholder="Ej. Service - Flush Platinum" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Modelo del spa</label>
+          <input type="text" id="fSpaModel" placeholder="Ej. 2014 El Dorado ES" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Número de serie</label>
+          <input type="text" id="fSerial" placeholder="Ej. 9534" autocomplete="off">
+        </div>
+        <div class="field full">
+          <label>Notas internas</label>
+          <textarea id="fNotes" placeholder="No se manda al cliente"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('formModal')">Cancelar</button>
+      <button class="btn btn-primary" id="formSaveBtn" onclick="saveInvoice()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SEND MODAL -->
+<div class="modal-backdrop" id="sendModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">Enviar factura por Outlook</span>
+      <button class="modal-close" onclick="closeModal('sendModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="sendNoPdfWarn" style="display:none;" class="alert-row amber" style="margin-bottom:14px;">
+        <span class="alert-icon">⚠</span> Esta factura no tiene PDF guardado. Se va a abrir el email <strong>sin adjunto</strong>; tendrás que arrastrarlo manualmente en Outlook.
+      </div>
+
+      <div class="send-step">
+        <div class="send-step-num">1</div>
+        <div class="send-step-text">Click en <strong>"Generar email con PDF adjunto"</strong> abajo.</div>
+      </div>
+      <div class="send-step">
+        <div class="send-step-num">2</div>
+        <div class="send-step-text">Se descarga un archivo <strong>.eml</strong> a tu carpeta de Downloads.</div>
+      </div>
+      <div class="send-step">
+        <div class="send-step-num">3</div>
+        <div class="send-step-text"><strong>Doble click al .eml</strong> — se abre Outlook con el email completo: cliente, asunto, formato bonito, PDF ya adjunto. Solo revisas y le das <strong>Send</strong>.</div>
+      </div>
+      <div class="send-step">
+        <div class="send-step-num">4</div>
+        <div class="send-step-text">Vuelves aquí y clickeas <strong>"Marcar como enviada"</strong>.</div>
+      </div>
+
+      <div class="email-preview">
+        <div class="email-preview-row">
+          <span class="email-preview-label">From:</span>
+          <span class="email-preview-value">service1@aspenspas.com</span>
+        </div>
+        <div class="email-preview-row">
+          <span class="email-preview-label">To:</span>
+          <span class="email-preview-value" id="prevTo">—</span>
+        </div>
+        <div class="email-preview-row">
+          <span class="email-preview-label">Subject:</span>
+          <span class="email-preview-value" id="prevSubject">—</span>
+        </div>
+        <div class="email-preview-row">
+          <span class="email-preview-label">Adjunto:</span>
+          <span class="email-preview-value" id="prevAttachment">—</span>
+        </div>
+        <div class="email-body-preview" id="prevBody">—</div>
+      </div>
+
+      <div style="font-size:11px; color:var(--text-mute); margin-top:14px; padding:10px 12px; background:var(--bg-soft); border-radius:8px; line-height:1.5;">
+        <strong>Primera vez:</strong> Si el .eml se abre en Apple Mail en vez de Outlook, en Finder click derecho al .eml → <em>Get Info</em> → <em>Open with</em> → escoge Microsoft Outlook → click <em>Change All</em>. Próxima vez se abre directo en Outlook.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('sendModal')">Cerrar</button>
+      <button class="btn btn-primary" onclick="generateEmlAndDownload()">📎 Generar email con PDF adjunto</button>
+      <button class="btn btn-success" id="markSentBtn" onclick="markAsSent()">Marcar como enviada</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM -->
+<div class="modal-backdrop" id="deleteModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">¿Eliminar factura?</span>
+      <button class="modal-close" onclick="closeModal('deleteModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:14px; color:var(--text-soft);">Esta acción no se puede deshacer. La factura <strong id="delInvoiceNum" style="color:var(--text);">—</strong> de <strong id="delCustomer" style="color:var(--text);">—</strong> será eliminada del tracker.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('deleteModal')">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CUSTOMER ADD/EDIT MODAL -->
+<div class="modal-backdrop" id="customerModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="customerFormTitle">Agregar cliente</span>
+      <button class="modal-close" onclick="closeModal('customerModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field full">
+          <label>Nombre completo <span class="req">*</span></label>
+          <input type="text" id="cName" placeholder="Ej. Reynaldo, Alberto" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Nombre para saludo</label>
+          <input type="text" id="cGreeting" placeholder="Auto desde nombre" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Email <span class="req">*</span></label>
+          <input type="email" id="cEmail" placeholder="cliente@email.com" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Teléfono</label>
+          <input type="text" id="cPhone" placeholder="314-XXX-XXXX" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Modelo del spa</label>
+          <input type="text" id="cSpaModel" placeholder="Ej. 2014 El Dorado ES" autocomplete="off">
+        </div>
+        <div class="field full">
+          <label>Dirección</label>
+          <input type="text" id="cAddress" placeholder="Ej. 9017 St. Louis Ave, St. Louis, MO 63114" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Número de serie del spa</label>
+          <input type="text" id="cSerial" placeholder="Ej. 9534" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Modelo del cabinet/heater</label>
+          <input type="text" id="cCabinet" placeholder="Ej. ACC 2000" autocomplete="off">
+        </div>
+        <div class="field full">
+          <label>Notas internas</label>
+          <textarea id="cNotes" placeholder="Información adicional del cliente"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="customerDeleteBtn" onclick="deleteCurrentCustomer()" style="margin-right:auto;display:none;">Eliminar</button>
+      <button class="btn btn-ghost" onclick="closeModal('customerModal')">Cancelar</button>
+      <button class="btn btn-primary" id="customerSaveBtn" onclick="saveCustomer()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-backdrop" id="settingsModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">⚙ Configuración</span>
+      <button class="modal-close" onclick="closeModal('settingsModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field" style="margin-bottom:18px;">
+        <label>📞 Teléfono de Aspen Spas (aparece en la firma del email)</label>
+        <input type="text" id="setPhone" placeholder="314-XXX-XXXX">
+      </div>
+      
+      <div class="field" style="margin-bottom:18px;">
+        <label>🌐 Sitio web (firma del email)</label>
+        <input type="text" id="setWebsite" placeholder="aspenspas.com">
+      </div>
+
+      <div class="field" style="margin-bottom:18px;">
+        <label>👤 Nombre que aparece como remitente</label>
+        <input type="text" id="setFromName" placeholder="Aspen Spas Service">
+      </div>
+
+      <div class="field" style="margin-bottom:18px;">
+        <label>🔥 Configuración de Firebase (pega el bloque JSON completo)</label>
+        <textarea id="setFirebaseConfig" placeholder='{
+  "apiKey": "...",
+  "authDomain": "invoice-daily-f170e.firebaseapp.com",
+  "databaseURL": "https://invoice-daily-f170e-default-rtdb.firebaseio.com",
+  "projectId": "invoice-daily-f170e",
+  "storageBucket": "invoice-daily-f170e.appspot.com",
+  "messagingSenderId": "...",
+  "appId": "..."
+}' style="min-height:160px; font-family:'JetBrains Mono', monospace; font-size:12px;"></textarea>
+        <span class="field-hint">Copia este bloque desde tu Service Dashboard existente. Si lo dejas vacío, todo se guarda solo en este navegador (modo local).</span>
+      </div>
+
+      <div style="background:var(--accent-soft); padding:12px 14px; border-radius:var(--r-md); font-size:12px; color:var(--text); line-height:1.6;">
+        <strong>💡 Dónde encontrar la config de Firebase:</strong><br>
+        1. Abre tu Service Dashboard existente (`invoice-daily-f170e`)<br>
+        2. En GitHub o tu archivo local, busca el bloque que dice <code>firebaseConfig = {…}</code><br>
+        3. Copia desde la llave <code>{</code> hasta la llave <code>}</code> y pégalo arriba
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('settingsModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveSettings()">Guardar y recargar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js';
+import { getDatabase, ref, onValue, push, set, remove, update, child, get } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js';
+
+// ════════════════════════════════════════════════════════════
+// CONFIGURACIÓN — Se guarda en localStorage. Edítala desde el botón ⚙ del header
+// No necesitas editar este HTML manualmente
+// ════════════════════════════════════════════════════════════
+const SETTINGS_KEY = 'aspenInvoiceTracker_settings_v1';
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+const savedSettings = loadSettings() || {};
+const FIREBASE_CONFIG = savedSettings.firebaseConfig || {
+  apiKey: "REEMPLAZAR_CON_TU_API_KEY",
+  authDomain: "invoice-daily-f170e.firebaseapp.com",
+  databaseURL: "https://invoice-daily-f170e-default-rtdb.firebaseio.com",
+  projectId: "invoice-daily-f170e",
+  storageBucket: "invoice-daily-f170e.appspot.com",
+  messagingSenderId: "REEMPLAZAR",
+  appId: "REEMPLAZAR"
+};
+const COMPANY_PHONE = savedSettings.phone || '314-XXX-XXXX';
+const COMPANY_WEBSITE = savedSettings.website || 'aspenspas.com';
+const FROM_NAME = savedSettings.fromName || 'Aspen Spas Service';
+
+// ════════════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ════════════════════════════════════════════════════════════
+let db = null;
+let allInvoices = [];
+let allCustomers = [];
+let currentFilter = 'all';
+let searchTerm = '';
+let editingId = null;
+let editingCustomerId = null;
+let sendingId = null;
+let deletingId = null;
+let useLocalStorage = false;
+const LS_KEY_C = 'aspenInvoiceTracker_customers_v1';
+let currentPdfBase64 = null;  // PDF subido en el form actual (base64)
+let currentPdfFilename = null;
+let currentPdfSize = 0;
+
+const isConfigSet = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith('REEMPLAZAR');
+
+// ════════════════════════════════════════════════════════════
+// INICIALIZACIÓN
+// ════════════════════════════════════════════════════════════
+function initFirebase() {
+  if (!isConfigSet) {
+    console.warn('Firebase no configurado, usando localStorage');
+    document.getElementById('setupBanner').style.display = 'flex';
+    setConnectionStatus('local', 'Modo local (sin Firebase)');
+    useLocalStorage = true;
+    loadFromLocalStorage();
+    return;
+  }
+  try {
+    const app = initializeApp(FIREBASE_CONFIG);
+    db = getDatabase(app);
+    setConnectionStatus('connecting', 'Conectando a Firebase…');
+    
+    const invRef = ref(db, 'invoiceTracker/invoices');
+    onValue(invRef, (snap) => {
+      const data = snap.val() || {};
+      allInvoices = Object.entries(data).map(([id, v]) => ({ id, ...v }));
+      setConnectionStatus('connected', 'Sincronizado · Firebase');
+      computeAndRender();
+    }, (err) => {
+      console.error('Firebase error:', err);
+      setConnectionStatus('error', 'Error de conexión');
+      useLocalStorage = true;
+      loadFromLocalStorage();
+    });
+    
+    // Suscripción al nodo de clientes
+    const custRef = ref(db, 'invoiceTracker/customers');
+    onValue(custRef, (snap) => {
+      const data = snap.val() || {};
+      allCustomers = Object.entries(data).map(([id, v]) => ({ id, ...v }));
+      computeAndRender();
+    });
+  } catch (e) {
+    console.error('Init error:', e);
+    setConnectionStatus('error', 'Error al inicializar');
+    useLocalStorage = true;
+    loadFromLocalStorage();
+  }
+}
+
+function setConnectionStatus(state, label) {
+  const dot = document.getElementById('connDot');
+  const txt = document.getElementById('connText');
+  dot.className = 'connection-dot' + (state === 'connected' ? ' connected' : state === 'error' ? ' error' : '');
+  txt.textContent = label;
+}
+
+// ════════════════════════════════════════════════════════════
+// LOCAL STORAGE FALLBACK (mientras configuras Firebase)
+// ════════════════════════════════════════════════════════════
+const LS_KEY = 'aspenInvoiceTracker_v1';
+function loadFromLocalStorage() {
+  try {
+    const raw = localStorage.getItem(LS_KEY) || '[]';
+    allInvoices = JSON.parse(raw);
+    const rawC = localStorage.getItem(LS_KEY_C) || '[]';
+    allCustomers = JSON.parse(rawC);
+  } catch { allInvoices = []; allCustomers = []; }
+  computeAndRender();
+}
+function saveToLocalStorage() {
+  try { 
+    localStorage.setItem(LS_KEY, JSON.stringify(allInvoices));
+    localStorage.setItem(LS_KEY_C, JSON.stringify(allCustomers));
+  } catch {}
+}
+
+// ════════════════════════════════════════════════════════════
+// CRUD DE FACTURAS
+// ════════════════════════════════════════════════════════════
+async function createInvoice(data) {
+  const now = Date.now();
+  const invoice = {
+    ...data,
+    status: 'pending',
+    createdAt: now,
+    sentAt: null,
+    paidAt: null,
+    history: [{ ts: now, action: 'created' }]
+  };
+  if (useLocalStorage) {
+    invoice.id = 'local_' + now;
+    allInvoices.push(invoice);
+    saveToLocalStorage();
+    computeAndRender();
+  } else {
+    const newRef = push(ref(db, 'invoiceTracker/invoices'));
+    await set(newRef, invoice);
+  }
+  toast('Factura agregada', 'success');
+}
+
+async function updateInvoiceData(id, updates) {
+  if (useLocalStorage) {
+    const idx = allInvoices.findIndex(i => i.id === id);
+    if (idx >= 0) {
+      allInvoices[idx] = { ...allInvoices[idx], ...updates };
+      saveToLocalStorage();
+      computeAndRender();
+    }
+  } else {
+    await update(ref(db, `invoiceTracker/invoices/${id}`), updates);
+  }
+}
+
+async function deleteInvoice(id) {
+  if (useLocalStorage) {
+    allInvoices = allInvoices.filter(i => i.id !== id);
+    saveToLocalStorage();
+    computeAndRender();
+  } else {
+    await remove(ref(db, `invoiceTracker/invoices/${id}`));
+  }
+  toast('Factura eliminada', 'success');
+}
+
+// ════════════════════════════════════════════════════════════
+// CRUD DE CLIENTES
+// ════════════════════════════════════════════════════════════
+async function createCustomer(data) {
+  const now = Date.now();
+  const customer = { ...data, createdAt: now, updatedAt: now };
+  if (useLocalStorage) {
+    customer.id = 'cust_' + now;
+    allCustomers.push(customer);
+    saveToLocalStorage();
+    computeAndRender();
+    return customer.id;
+  } else {
+    const newRef = push(ref(db, 'invoiceTracker/customers'));
+    await set(newRef, customer);
+    return newRef.key;
+  }
+}
+
+async function updateCustomerData(id, updates) {
+  updates.updatedAt = Date.now();
+  if (useLocalStorage) {
+    const idx = allCustomers.findIndex(c => c.id === id);
+    if (idx >= 0) {
+      allCustomers[idx] = { ...allCustomers[idx], ...updates };
+      saveToLocalStorage();
+      computeAndRender();
+    }
+  } else {
+    await update(ref(db, `invoiceTracker/customers/${id}`), updates);
+  }
+}
+
+async function deleteCustomer(id) {
+  if (useLocalStorage) {
+    allCustomers = allCustomers.filter(c => c.id !== id);
+    saveToLocalStorage();
+    computeAndRender();
+  } else {
+    await remove(ref(db, `invoiceTracker/customers/${id}`));
+  }
+}
+
+// Auto-crear cliente desde datos de factura si no existe
+async function autoCreateCustomerFromInvoice(invoiceData) {
+  const matched = findCustomerByName(invoiceData.customerName);
+  if (matched) {
+    // Actualizar info que pueda haber cambiado
+    const updates = {};
+    if (invoiceData.customerEmail && invoiceData.customerEmail !== matched.email) updates.email = invoiceData.customerEmail;
+    if (invoiceData.spaModel && !matched.spaModel) updates.spaModel = invoiceData.spaModel;
+    if (invoiceData.serialNumber && !matched.serialNumber) updates.serialNumber = invoiceData.serialNumber;
+    if (Object.keys(updates).length > 0) await updateCustomerData(matched.id, updates);
+    return matched.id;
+  }
+  // Crear cliente nuevo
+  return await createCustomer({
+    name: invoiceData.customerName,
+    greetingName: invoiceData.greetingName || deriveGreetingName(invoiceData.customerName),
+    email: invoiceData.customerEmail,
+    spaModel: invoiceData.spaModel || '',
+    serialNumber: invoiceData.serialNumber || '',
+    phone: '',
+    address: '',
+    cabinet: '',
+    notes: ''
+  });
+}
+
+function findCustomerByName(name) {
+  if (!name) return null;
+  const norm = name.trim().toLowerCase();
+  return allCustomers.find(c => (c.name || '').trim().toLowerCase() === norm);
+}
+
+// ════════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════════
+function deriveGreetingName(fullName) {
+  if (!fullName) return '';
+  // "Reynaldo, Alberto" → "Alberto"
+  if (fullName.includes(',')) {
+    const after = fullName.split(',')[1].trim();
+    return after.split(/\s+/)[0];
+  }
+  // "Doug & Carrie Meyer" → "Doug"
+  if (fullName.includes('&')) {
+    return fullName.split('&')[0].trim().split(/\s+/)[0];
+  }
+  // "Alberto Reynaldo" → "Alberto"
+  return fullName.trim().split(/\s+/)[0];
+}
+
+function fmtCurrency(amt) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amt || 0);
+}
+function fmtDate(ts) {
+  if (!ts) return '—';
+  const d = typeof ts === 'string' ? new Date(ts) : new Date(ts);
+  return d.toLocaleDateString('es-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function fmtDateShort(ts) {
+  if (!ts) return '—';
+  const d = typeof ts === 'string' ? new Date(ts) : new Date(ts);
+  return d.toLocaleDateString('es-US', { month: 'short', day: 'numeric' });
+}
+function daysSince(ts) {
+  if (!ts) return null;
+  return Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24));
+}
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function deriveStatus(inv) {
+  if (inv.status === 'paid') return 'paid';
+  if (inv.status === 'sent') {
+    const d = daysSince(inv.sentAt);
+    if (d !== null && d >= 7) return 'followup';
+    return 'sent';
+  }
+  return 'pending';
+}
+
+function statusLabel(s) {
+  return { pending: 'Sin enviar', sent: 'Enviada', followup: 'Por cobrar', paid: 'Pagada' }[s] || s;
+}
+
+// ════════════════════════════════════════════════════════════
+// EMAIL TEMPLATE & MAILTO
+// ════════════════════════════════════════════════════════════
+function buildEmailSubject(inv) {
+  return `Invoice #${inv.invoiceNumber} from Aspen Spas`;
+}
+
+// Mantenido como alias para compatibilidad — ahora delega al builder de plain text
+function buildEmailBody(inv) {
+  return buildEmailPlainText(inv);
+}
+
+// ════════════════════════════════════════════════════════════
+// RENDERING
+// ════════════════════════════════════════════════════════════
+function computeAndRender() {
+  const sorted = [...allInvoices].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  
+  // Stats
+  const now = Date.now();
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0,0,0,0);
+  const startTs = startOfMonth.getTime();
+  
+  let pending = 0, followup = 0, sentMonth = 0, paidMonth = 0;
+  let sentMonthAmt = 0, paidMonthAmt = 0;
+  let oldPending = 0;
+  
+  let cAll = sorted.length, cPending = 0, cFollowup = 0, cSent = 0, cPaid = 0;
+  
+  for (const inv of sorted) {
+    const s = deriveStatus(inv);
+    if (s === 'pending') {
+      pending++;
+      cPending++;
+      if (daysSince(inv.createdAt) >= 1) oldPending++;
+    } else if (s === 'sent') {
+      cSent++;
+      if ((inv.sentAt || 0) >= startTs) {
+        sentMonth++;
+        sentMonthAmt += Number(inv.amount) || 0;
+      }
+    } else if (s === 'followup') {
+      followup++;
+      cFollowup++;
+      cSent++;
+    } else if (s === 'paid') {
+      cPaid++;
+      if ((inv.paidAt || 0) >= startTs) {
+        paidMonth++;
+        paidMonthAmt += Number(inv.amount) || 0;
+      }
+    }
+  }
+  
+  document.getElementById('cntPending').textContent = pending;
+  document.getElementById('cntPendingMeta').textContent = oldPending > 0 ? `${oldPending} con +24h` : 'Al día';
+  document.getElementById('cntFollowup').textContent = followup;
+  document.getElementById('cntSentMonth').textContent = sentMonth;
+  document.getElementById('cntSentMonthAmt').textContent = fmtCurrency(sentMonthAmt);
+  document.getElementById('cntPaidMonth').textContent = paidMonth;
+  document.getElementById('cntPaidMonthAmt').textContent = fmtCurrency(paidMonthAmt);
+  
+  document.getElementById('cntAll').textContent = cAll;
+  document.getElementById('cntPendingTab').textContent = cPending;
+  document.getElementById('cntFollowupTab').textContent = cFollowup;
+  document.getElementById('cntSentTab').textContent = cSent;
+  document.getElementById('cntPaidTab').textContent = cPaid;
+  document.getElementById('cntCustomersTab').textContent = allCustomers.length;
+  
+  // Alerts
+  const alertsBox = document.getElementById('alertsBox');
+  alertsBox.innerHTML = '';
+  if (oldPending > 0) {
+    const div = document.createElement('div');
+    div.className = 'alert-row red';
+    div.innerHTML = `<span class="alert-icon">⚠</span> Tienes <strong>${oldPending} factura${oldPending !== 1 ? 's' : ''}</strong> creada${oldPending !== 1 ? 's' : ''} hace más de 24 horas sin enviar.`;
+    alertsBox.appendChild(div);
+  }
+  if (followup > 0) {
+    const div = document.createElement('div');
+    div.className = 'alert-row amber';
+    div.innerHTML = `<span class="alert-icon">⏰</span> <strong>${followup} factura${followup !== 1 ? 's' : ''}</strong> enviada${followup !== 1 ? 's' : ''} hace +7 días sin marca de pago.`;
+    alertsBox.appendChild(div);
+  }
+  
+  // Filtered list
+  let filtered = sorted;
+  if (currentFilter === 'customers') {
+    // Mostrar vista de clientes
+    document.getElementById('invoiceList').style.display = 'none';
+    document.getElementById('customerView').style.display = 'block';
+    renderCustomers();
+    return;
+  }
+  document.getElementById('invoiceList').style.display = 'flex';
+  document.getElementById('customerView').style.display = 'none';
+  
+  if (currentFilter !== 'all') {
+    filtered = filtered.filter(i => deriveStatus(i) === currentFilter);
+  }
+  if (searchTerm) {
+    const q = searchTerm.toLowerCase();
+    filtered = filtered.filter(i => 
+      (i.invoiceNumber || '').toLowerCase().includes(q) ||
+      (i.customerName || '').toLowerCase().includes(q) ||
+      (i.customerEmail || '').toLowerCase().includes(q) ||
+      (i.serialNumber || '').toLowerCase().includes(q)
+    );
+  }
+  
+  renderList(filtered);
+}
+
+function renderCustomers() {
+  const list = document.getElementById('customerList');
+  let customers = [...allCustomers].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  if (searchTerm) {
+    const q = searchTerm.toLowerCase();
+    customers = customers.filter(c => 
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q) ||
+      (c.serialNumber || '').toLowerCase().includes(q)
+    );
+  }
+  
+  if (customers.length === 0) {
+    list.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">👥</div>
+        <div class="empty-title">No tienes clientes guardados aún</div>
+        <div class="empty-text">Cada vez que crees una factura nueva con un cliente que no exista, se agregará automáticamente aquí. O puedes agregar uno manualmente.</div>
+        <button class="btn btn-primary" onclick="window.openAddCustomerModal()">+ Agregar cliente</button>
+      </div>`;
+    return;
+  }
+  
+  list.innerHTML = customers.map(c => {
+    const invoiceCount = allInvoices.filter(i => (i.customerName || '').trim().toLowerCase() === (c.name || '').trim().toLowerCase()).length;
+    return `
+      <div class="customer-card" onclick="window.openEditCustomerModal('${c.id}')">
+        <div class="customer-info">
+          <div class="customer-name">${escapeHtml(c.name)}</div>
+          <div class="customer-meta">
+            ${c.email ? `<span>✉ ${escapeHtml(c.email)}</span>` : ''}
+            ${c.phone ? `<span>☎ ${escapeHtml(c.phone)}</span>` : ''}
+            ${c.spaModel ? `<span>🛁 ${escapeHtml(c.spaModel)}</span>` : ''}
+            ${c.serialNumber ? `<span># ${escapeHtml(c.serialNumber)}</span>` : ''}
+          </div>
+          <div class="customer-stats">
+            <span>${invoiceCount} factura${invoiceCount !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+        <div class="invoice-actions">
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();window.openEditCustomerModal('${c.id}')">Editar</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderList(invoices) {
+  const list = document.getElementById('invoiceList');
+  if (invoices.length === 0) {
+    list.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">📋</div>
+        <div class="empty-title">No hay facturas en esta vista</div>
+        <div class="empty-text">${allInvoices.length === 0 ? 'Empieza agregando tu primera factura. Cada vez que crees una en QuickBooks, regístrala aquí para no olvidarla.' : 'Cambia de pestaña o ajusta tu búsqueda.'}</div>
+        ${allInvoices.length === 0 ? '<button class="btn btn-primary" onclick="window.openAddModal()">+ Nueva Factura</button>' : ''}
+      </div>`;
+    return;
+  }
+  
+  list.innerHTML = invoices.map(inv => {
+    const s = deriveStatus(inv);
+    const urgentCls = s === 'pending' && daysSince(inv.createdAt) >= 1 ? ' urgent' : (s === 'followup' ? ' warn' : '');
+    const days = s === 'pending' ? daysSince(inv.createdAt) : (s === 'followup' || s === 'sent' ? daysSince(inv.sentAt) : null);
+    const daysLabel = days !== null && days !== undefined ? (s === 'pending' ? `creada hace ${days}d` : `enviada hace ${days}d`) : '';
+    
+    return `
+      <div class="invoice-card${urgentCls}">
+        <div class="invoice-status ${s}"></div>
+        <div class="invoice-main">
+          <div class="invoice-title">
+            <span class="invoice-num">#${escapeHtml(inv.invoiceNumber)}</span>
+            <span class="invoice-customer">${escapeHtml(inv.customerName)}</span>
+            <span class="status-badge ${s}">${statusLabel(s)}</span>
+          </div>
+          <div class="invoice-meta">
+            <span>✉ ${escapeHtml(inv.customerEmail)}</span>
+            ${inv.technician ? `<span>👷 ${escapeHtml(inv.technician)}</span>` : ''}
+            ${inv.serviceDate ? `<span>📅 ${fmtDateShort(inv.serviceDate)}</span>` : ''}
+            ${daysLabel ? `<span>⏱ ${daysLabel}</span>` : ''}
+          </div>
+        </div>
+        <div class="invoice-amount">${fmtCurrency(inv.amount)}</div>
+        <div class="invoice-actions">
+          ${s === 'pending' ? `<button class="btn btn-primary btn-sm" onclick="window.openSendModal('${inv.id}')">Mandar</button>` : ''}
+          ${s === 'sent' || s === 'followup' ? `<button class="btn btn-success btn-sm" onclick="window.markAsPaid('${inv.id}')">✓ Pagada</button>` : ''}
+          ${s === 'sent' || s === 'followup' ? `<button class="btn btn-secondary btn-sm" onclick="window.openSendModal('${inv.id}')">Reenviar</button>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="window.openEditModal('${inv.id}')">Editar</button>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="window.openDeleteModal('${inv.id}')" title="Eliminar">🗑</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════
+// MODAL HANDLERS
+// ════════════════════════════════════════════════════════════
+window.openAddModal = function() {
+  editingId = null;
+  document.getElementById('formTitle').textContent = 'Nueva factura';
+  document.getElementById('formSaveBtn').textContent = 'Guardar';
+  ['fInvoiceNumber','fAmount','fCustomerName','fGreetingName','fCustomerEmail','fServiceDesc','fSpaModel','fSerial','fNotes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('fTechnician').value = '';
+  document.getElementById('fServiceDate').value = new Date().toISOString().split('T')[0];
+  // Reset PDF state
+  removePdf();
+  document.getElementById('formModal').classList.add('open');
+  setTimeout(() => document.getElementById('fInvoiceNumber').focus(), 100);
+};
+
+window.openEditModal = function(id) {
+  const inv = allInvoices.find(i => i.id === id);
+  if (!inv) return;
+  editingId = id;
+  document.getElementById('formTitle').textContent = `Editar factura #${inv.invoiceNumber}`;
+  document.getElementById('formSaveBtn').textContent = 'Actualizar';
+  document.getElementById('fInvoiceNumber').value = inv.invoiceNumber || '';
+  document.getElementById('fAmount').value = inv.amount || '';
+  document.getElementById('fCustomerName').value = inv.customerName || '';
+  document.getElementById('fGreetingName').value = inv.greetingName || '';
+  document.getElementById('fCustomerEmail').value = inv.customerEmail || '';
+  document.getElementById('fServiceDate').value = inv.serviceDate || '';
+  document.getElementById('fTechnician').value = inv.technician || '';
+  document.getElementById('fServiceDesc').value = inv.serviceDescription || '';
+  document.getElementById('fSpaModel').value = inv.spaModel || '';
+  document.getElementById('fSerial').value = inv.serialNumber || '';
+  document.getElementById('fNotes').value = inv.notes || '';
+  // Reset y luego mostrar PDF existente si lo hay
+  removePdf();
+  if (inv.pdfBase64) {
+    currentPdfBase64 = inv.pdfBase64;
+    currentPdfFilename = inv.pdfFilename || `Invoice_${inv.invoiceNumber}.pdf`;
+    currentPdfSize = inv.pdfSize || 0;
+    showPdfFileInfo(currentPdfFilename, currentPdfSize);
+    document.getElementById('pdfDropZone').style.display = 'none';
+  }
+  document.getElementById('formModal').classList.add('open');
+};
+
+window.saveInvoice = async function() {
+  const data = {
+    invoiceNumber: document.getElementById('fInvoiceNumber').value.trim(),
+    amount: parseFloat(document.getElementById('fAmount').value) || 0,
+    customerName: document.getElementById('fCustomerName').value.trim(),
+    greetingName: document.getElementById('fGreetingName').value.trim(),
+    customerEmail: document.getElementById('fCustomerEmail').value.trim(),
+    serviceDate: document.getElementById('fServiceDate').value,
+    technician: document.getElementById('fTechnician').value,
+    serviceDescription: document.getElementById('fServiceDesc').value.trim(),
+    spaModel: document.getElementById('fSpaModel').value.trim(),
+    serialNumber: document.getElementById('fSerial').value.trim(),
+    notes: document.getElementById('fNotes').value.trim()
+  };
+  
+  if (!data.invoiceNumber || !data.customerName || !data.customerEmail) {
+    toast('Faltan campos requeridos: factura, cliente, email', 'error');
+    return;
+  }
+  
+  if (editingId) {
+    // Si subió un PDF nuevo, actualizarlo también
+    if (currentPdfBase64) {
+      data.pdfBase64 = currentPdfBase64;
+      data.pdfFilename = currentPdfFilename;
+      data.pdfSize = currentPdfSize;
+    }
+    await updateInvoiceData(editingId, data);
+    toast('Factura actualizada', 'success');
+  } else {
+    // Auto-crear/actualizar cliente al crear factura nueva
+    await autoCreateCustomerFromInvoice(data);
+    // Guardar PDF si lo subió
+    if (currentPdfBase64) {
+      data.pdfBase64 = currentPdfBase64;
+      data.pdfFilename = currentPdfFilename;
+      data.pdfSize = currentPdfSize;
+    }
+    await createInvoice(data);
+  }
+  closeModal('formModal');
+};
+
+window.openSendModal = function(id) {
+  const inv = allInvoices.find(i => i.id === id);
+  if (!inv) return;
+  sendingId = id;
+  document.getElementById('prevTo').textContent = inv.customerEmail;
+  document.getElementById('prevSubject').textContent = buildEmailSubject(inv);
+  document.getElementById('prevBody').textContent = buildEmailPlainText(inv);
+  
+  const attachmentEl = document.getElementById('prevAttachment');
+  const warnEl = document.getElementById('sendNoPdfWarn');
+  if (inv.pdfBase64) {
+    const sizeKb = ((inv.pdfSize || 0) / 1024).toFixed(0);
+    attachmentEl.innerHTML = `📎 ${escapeHtml(inv.pdfFilename || 'Invoice.pdf')} <span style="color:var(--text-mute);">(${sizeKb} KB)</span>`;
+    warnEl.style.display = 'none';
+  } else {
+    attachmentEl.innerHTML = `<span style="color:var(--followup);">⚠ Sin PDF guardado</span>`;
+    warnEl.style.display = 'flex';
+  }
+  
+  document.getElementById('sendModal').classList.add('open');
+};
+
+window.markAsSent = async function() {
+  if (!sendingId) return;
+  const inv = allInvoices.find(i => i.id === sendingId);
+  const now = Date.now();
+  const history = [...(inv.history || []), { ts: now, action: 'sent' }];
+  await updateInvoiceData(sendingId, { status: 'sent', sentAt: now, history });
+  toast(`Factura #${inv.invoiceNumber} marcada como enviada`, 'success');
+  closeModal('sendModal');
+};
+
+window.markAsPaid = async function(id) {
+  const inv = allInvoices.find(i => i.id === id);
+  if (!inv) return;
+  if (!confirm(`¿Marcar factura #${inv.invoiceNumber} de ${inv.customerName} como pagada?`)) return;
+  const now = Date.now();
+  const history = [...(inv.history || []), { ts: now, action: 'paid' }];
+  await updateInvoiceData(id, { status: 'paid', paidAt: now, history });
+  toast(`Factura #${inv.invoiceNumber} marcada como pagada`, 'success');
+};
+
+window.openDeleteModal = function(id) {
+  const inv = allInvoices.find(i => i.id === id);
+  if (!inv) return;
+  deletingId = id;
+  document.getElementById('delInvoiceNum').textContent = '#' + inv.invoiceNumber;
+  document.getElementById('delCustomer').textContent = inv.customerName;
+  document.getElementById('deleteModal').classList.add('open');
+};
+
+window.confirmDelete = async function() {
+  if (!deletingId) return;
+  await deleteInvoice(deletingId);
+  closeModal('deleteModal');
+};
+
+window.closeModal = function(id) {
+  document.getElementById(id).classList.remove('open');
+};
+
+// ════════════════════════════════════════════════════════════
+// SETTINGS MODAL
+// ════════════════════════════════════════════════════════════
+window.openSettingsModal = function() {
+  document.getElementById('setPhone').value = savedSettings.phone || '';
+  document.getElementById('setWebsite').value = savedSettings.website || 'aspenspas.com';
+  document.getElementById('setFromName').value = savedSettings.fromName || 'Aspen Spas Service';
+  document.getElementById('setFirebaseConfig').value = savedSettings.firebaseConfig 
+    ? JSON.stringify(savedSettings.firebaseConfig, null, 2) 
+    : '';
+  document.getElementById('settingsModal').classList.add('open');
+};
+
+window.saveSettings = function() {
+  const newSettings = {
+    phone: document.getElementById('setPhone').value.trim(),
+    website: document.getElementById('setWebsite').value.trim() || 'aspenspas.com',
+    fromName: document.getElementById('setFromName').value.trim() || 'Aspen Spas Service',
+    firebaseConfig: null
+  };
+  
+  const fbRaw = document.getElementById('setFirebaseConfig').value.trim();
+  if (fbRaw) {
+    try {
+      // Limpiar pegado de "const firebaseConfig = " si lo pegan completo
+      let cleaned = fbRaw.replace(/^.*?(\{)/s, '{').replace(/(;|\s)*$/, '');
+      // Firebase da el código en JavaScript (sin comillas en keys: apiKey: "...")
+      // Convertir a JSON estricto agregando comillas a las keys
+      cleaned = cleaned.replace(/([{,]\s*)([A-Za-z_][\w]*)(\s*):/g, '$1"$2"$3:');
+      // Quitar trailing commas (JS las permite, JSON no)
+      cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
+      const parsed = JSON.parse(cleaned);
+      if (!parsed.apiKey) throw new Error('apiKey faltante');
+      newSettings.firebaseConfig = parsed;
+    } catch (e) {
+      console.error('Firebase parse error:', e);
+      toast('JSON de Firebase inválido. Asegúrate de copiar el bloque completo desde { hasta }', 'error');
+      return;
+    }
+  }
+  
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
+  toast('Configuración guardada. Recargando…', 'success');
+  setTimeout(() => location.reload(), 800);
+};
+
+// ════════════════════════════════════════════════════════════
+// PDF UPLOAD & PARSING
+// ════════════════════════════════════════════════════════════
+window.handlePdfUpload = async function(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.type !== 'application/pdf') {
+    toast('Solo archivos PDF', 'error');
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    toast('PDF muy grande (max 5MB). Comprime y vuelve a intentar.', 'error');
+    return;
+  }
+  
+  const dropZone = document.getElementById('pdfDropZone');
+  dropZone.classList.add('processing');
+  dropZone.querySelector('.pdf-upload-title').textContent = 'Procesando PDF…';
+  
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    
+    // Convertir a base64 para guardar
+    currentPdfBase64 = await arrayBufferToBase64(arrayBuffer);
+    currentPdfFilename = file.name;
+    currentPdfSize = file.size;
+    
+    // Mostrar info del archivo y ocultar zona de upload
+    showPdfFileInfo(file.name, file.size);
+    dropZone.style.display = 'none';
+    
+    // Intentar extraer texto y campos
+    const extracted = await extractPdfFields(arrayBuffer);
+    // Filtrar campos especiales (_error)
+    const realFields = Object.keys(extracted).filter(k => !k.startsWith('_'));
+    if (realFields.length > 0) {
+      applyExtractedFields(extracted);
+      showExtractedBanner(realFields.length, null);
+    } else {
+      showExtractedBanner(0, extracted._error || null);
+    }
+    
+  } catch (e) {
+    console.error('Error PDF:', e);
+    toast('Error procesando PDF: ' + e.message, 'error');
+    dropZone.classList.remove('processing');
+    dropZone.querySelector('.pdf-upload-title').textContent = 'Subir PDF de la factura de QuickBooks';
+  }
+};
+
+function showPdfFileInfo(name, size) {
+  const sizeKb = (size / 1024).toFixed(0);
+  const info = document.getElementById('pdfFileInfo');
+  info.innerHTML = `
+    <div class="pdf-file-info">
+      <div class="pdf-file-info-icon">📄</div>
+      <div class="pdf-file-info-main">
+        <div class="pdf-file-info-name">${escapeHtml(name)}</div>
+        <div class="pdf-file-info-size">${sizeKb} KB · Adjunto al email automáticamente</div>
+      </div>
+      <button class="pdf-file-info-remove" onclick="removePdf()" title="Quitar PDF">×</button>
+    </div>`;
+  info.style.display = 'block';
+}
+
+function showExtractedBanner(count, errorMsg) {
+  const banner = document.getElementById('extractedBanner');
+  if (count > 0) {
+    banner.className = 'pdf-extracted-banner';
+    banner.innerHTML = `<span>✓</span> Auto-completé ${count} campo${count !== 1 ? 's' : ''} del PDF. Revisa y completa lo que falte.`;
+    banner.style.display = 'flex';
+  } else {
+    banner.className = 'alert-row amber';
+    banner.style.marginBottom = '14px';
+    const reason = errorMsg ? ` (${escapeHtml(errorMsg)})` : '';
+    banner.innerHTML = `<span>ℹ</span> No pude extraer campos del PDF automáticamente${reason}. Llénalos manualmente abajo.`;
+    banner.style.display = 'flex';
+  }
+}
+
+window.removePdf = function() {
+  currentPdfBase64 = null;
+  currentPdfFilename = null;
+  currentPdfSize = 0;
+  document.getElementById('pdfFileInput').value = '';
+  document.getElementById('pdfFileInfo').style.display = 'none';
+  document.getElementById('extractedBanner').style.display = 'none';
+  const dropZone = document.getElementById('pdfDropZone');
+  dropZone.style.display = 'block';
+  dropZone.classList.remove('processing', 'has-file');
+  dropZone.querySelector('.pdf-upload-title').textContent = 'Subir PDF de la factura de QuickBooks';
+};
+
+async function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+async function extractPdfFields(arrayBuffer) {
+  // PDF.js v3 legacy se carga como global window.pdfjsLib desde el script tag
+  if (!window.pdfjsLib) {
+    console.error('PDF.js no se cargó. Verifica conexión a internet o CSP del navegador.');
+    return { _error: 'PDF.js no disponible. ¿Conexión a internet OK?' };
+  }
+  
+  // Configurar worker (necesario para PDF.js)
+  if (!window.pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+  
+  try {
+    const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+    let positionedText = [];
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      content.items.forEach(item => {
+        if (item.str && item.str.trim()) {
+          positionedText.push({ 
+            text: item.str, 
+            x: Math.round(item.transform[4]), 
+            y: Math.round(item.transform[5]) 
+          });
+        }
+      });
+    }
+    
+    if (positionedText.length === 0) {
+      console.warn('PDF cargó pero no devolvió texto. ¿PDF escaneado/imagen?');
+      return { _error: 'PDF sin texto extraíble (¿escaneado como imagen?)' };
+    }
+    
+    const lines = buildLinesFromPositioned(positionedText);
+    console.log('[PDF Parser] Lines extracted:', lines.length);
+    console.log('[PDF Parser] First 5 lines:', lines.slice(0, 5).map(l => l.text));
+    return parseInvoiceFromLines(lines, positionedText);
+  } catch (e) {
+    console.error('[PDF Parser] Error:', e);
+    return { _error: 'Error: ' + (e.message || e.toString()) };
+  }
+}
+
+function buildLinesFromPositioned(items) {
+  if (!items || items.length === 0) return [];
+  // Sort por y descendente (PDF coords: y crece hacia arriba)
+  const sorted = [...items].sort((a, b) => b.y - a.y);
+  const Y_TOL = 4;
+  const lines = [];
+  let currentLine = [];
+  let currentY = null;
+  
+  for (const item of sorted) {
+    if (currentY === null || Math.abs(item.y - currentY) <= Y_TOL) {
+      currentLine.push(item);
+      if (currentY === null) currentY = item.y;
+    } else {
+      currentLine.sort((a, b) => a.x - b.x);
+      lines.push({
+        y: currentY,
+        items: currentLine,
+        text: currentLine.map(i => i.text).join(' ').trim()
+      });
+      currentLine = [item];
+      currentY = item.y;
+    }
+  }
+  if (currentLine.length > 0) {
+    currentLine.sort((a, b) => a.x - b.x);
+    lines.push({
+      y: currentY,
+      items: currentLine,
+      text: currentLine.map(i => i.text).join(' ').trim()
+    });
+  }
+  
+  return lines.filter(l => l.text.length > 0);
+}
+
+function parseInvoiceFromLines(lines, allItems) {
+  const result = {};
+  const joined = lines.map(l => l.text).join(' ');
+  const lineTexts = lines.map(l => l.text);
+  
+  // ───────── INVOICE NUMBER ─────────
+  // QBD layout: "Invoice No." puede estar en la misma línea con la fecha intermedia,
+  // o en línea separada con valores debajo. Manejar ambos casos.
+  // Ejemplos reales:
+  //   "Date Invoice No. 5/6/2026 271199" (mismo Y)
+  //   "Invoice No." en una línea, "5/6/2026 271199" en la siguiente
+  //   "Invoice No. 271199" simple
+  let invMatch = joined.match(/Invoice\s*No\.?\s*[:.]?\s*(?:\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s+)?(\d{5,8})\b/i);
+  if (invMatch) {
+    result.invoiceNumber = invMatch[1];
+  } else {
+    // Buscar línea que contenga "Invoice No." y revisar siguientes líneas por número
+    for (let i = 0; i < lineTexts.length; i++) {
+      if (/Invoice\s*No\.?/i.test(lineTexts[i])) {
+        // Probar mismo patrón en esa línea sola
+        const sameLine = lineTexts[i].match(/Invoice\s*No\.?\s*[:.]?\s*(?:\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s+)?(\d{5,8})\b/i);
+        if (sameLine) { result.invoiceNumber = sameLine[1]; break; }
+        // Si no, escanear siguientes 3 líneas por número largo (no año)
+        for (let j = i + 1; j <= Math.min(i + 3, lineTexts.length - 1); j++) {
+          const allNums = [...lineTexts[j].matchAll(/\b(\d{5,8})\b/g)].map(m => m[1]);
+          for (const num of allNums) {
+            const n = parseInt(num);
+            if (n < 1900 || n > 2100) {  // no es un año
+              result.invoiceNumber = num;
+              break;
+            }
+          }
+          if (result.invoiceNumber) break;
+        }
+        if (result.invoiceNumber) break;
+      }
+    }
+  }
+  
+  // ───────── SERVICE DATE ─────────
+  let svcMatch = joined.match(/Service\s*Date\s*[:.]?\s*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
+  if (svcMatch) {
+    result.serviceDate = parseUSDate(svcMatch[1]);
+  } else {
+    // QBD a veces pone "Service Date" en una línea y la fecha debajo
+    for (let i = 0; i < lineTexts.length; i++) {
+      if (/^Service\s*Date\s*$/i.test(lineTexts[i].trim()) && i + 1 < lineTexts.length) {
+        const next = lineTexts[i + 1].trim();
+        const m = next.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/);
+        if (m) { result.serviceDate = parseUSDate(m[1]); break; }
+      }
+    }
+  }
+  
+  // ───────── TOTAL (NOT Subtotal, NOT Balance Due si es $0) ─────────
+  // Estrategia: buscar "Total" precedido por whitespace o inicio (NO "Subtotal")
+  // y capturar el valor numérico cercano
+  // Usamos la línea con "Total" y leemos el primer dollar value en la sección de totales
+  
+  let totalAmt = null;
+  for (let i = 0; i < lineTexts.length; i++) {
+    const line = lineTexts[i].trim();
+    // "Total $158.72" en una línea
+    let m = line.match(/(?:^|\s)Total\s+\$?\s*([\d,]+\.\d{2})\s*$/i);
+    if (m && !/Subtotal/i.test(line)) {
+      totalAmt = parseFloat(m[1].replace(/,/g, ''));
+      break;
+    }
+    // Solo "Total" — buscar valor en líneas siguientes
+    if (/^Total\s*$/i.test(line)) {
+      for (let j = i + 1; j <= Math.min(i + 4, lineTexts.length - 1); j++) {
+        const m2 = lineTexts[j].match(/\$?\s*([\d,]+\.\d{2})/);
+        if (m2) {
+          totalAmt = parseFloat(m2[1].replace(/,/g, ''));
+          break;
+        }
+      }
+      if (totalAmt !== null) break;
+    }
+  }
+  
+  // Fallback: usar el monto más alto positivo (suele ser el Total)
+  if (totalAmt === null) {
+    const allDollars = [...joined.matchAll(/\$?\s*([\d,]+\.\d{2})/g)]
+      .map(m => parseFloat(m[1].replace(/,/g, '')))
+      .filter(v => v > 0 && v < 999999);
+    if (allDollars.length > 0) totalAmt = Math.max(...allDollars);
+  }
+  
+  if (totalAmt !== null && totalAmt > 0) result.amount = totalAmt;
+  
+  // ───────── CUSTOMER NAME (Bill To) ─────────
+  // Estrategia: encontrar la línea con "Bill To:", luego buscar nombre en líneas siguientes
+  // que NO sean "Ship To:", labels, ni números puros
+  // Bonus: usar coordenadas X — el nombre debería estar a la izquierda (mismo X que "Bill To")
+  let billToLineIdx = -1;
+  let billToX = null;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^Bill\s*To\s*:?$/i.test(lines[i].text.trim()) || /^Bill\s*To\s*:/i.test(lines[i].text.trim())) {
+      billToLineIdx = i;
+      // Posición X de "Bill To:" — el primer item en la línea
+      billToX = lines[i].items[0]?.x;
+      break;
+    }
+  }
+  
+  if (billToLineIdx >= 0) {
+    const customerLines = [];
+    for (let j = billToLineIdx + 1; j <= Math.min(billToLineIdx + 6, lines.length - 1); j++) {
+      const line = lines[j];
+      const text = line.text.trim();
+      if (!text) continue;
+      // Skip la línea entera si solo dice "Ship To" 
+      if (/^Ship\s*To/i.test(text) && text.length < 12) continue;
+      // Stop al llegar a la tabla de items
+      if (/^Item\b|^Qty|^Description|^Rate|^Amount|^B\/O/i.test(text)) break;
+      
+      // Si la línea tiene "Ship To" mezclado con el nombre, separar por X
+      // Tomar solo items cuya X es <= la X de Bill To + tolerance
+      if (billToX !== null) {
+        const leftItems = line.items.filter(it => it.x <= billToX + 50);
+        const leftText = leftItems.map(it => it.text).join(' ').trim();
+        if (leftText && !/^Ship\s*To/i.test(leftText)) {
+          customerLines.push(leftText);
+        }
+      } else {
+        customerLines.push(text);
+      }
+      
+      if (customerLines.length >= 4) break;
+    }
+    
+    if (customerLines.length > 0) {
+      result.customerName = customerLines[0];
+      if (customerLines.length > 1) {
+        result.address = customerLines.slice(1).join(', ');
+      }
+    }
+  }
+  
+  // ───────── SERVICE DESCRIPTION ─────────
+  // Buscar línea "Services Provided:" o tomar la 1ra línea después de "Item Description"
+  for (let i = 0; i < lineTexts.length; i++) {
+    const m = lineTexts[i].match(/Services?\s*Provided\s*:\s*:?\s*(.+)/i);
+    if (m && m[1].trim().length > 5) {
+      result.serviceDescription = m[1].trim().slice(0, 150);
+      break;
+    }
+  }
+  
+  return result;
+}
+
+function parseUSDate(s) {
+  // "5/5/2026" o "05/05/26" → "2026-05-05"
+  const parts = s.split(/[\/\-]/);
+  if (parts.length !== 3) return '';
+  let [m, d, y] = parts;
+  if (y.length === 2) y = '20' + y;
+  return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
+
+function applyExtractedFields(extracted) {
+  if (extracted.invoiceNumber && !document.getElementById('fInvoiceNumber').value) {
+    document.getElementById('fInvoiceNumber').value = extracted.invoiceNumber;
+  }
+  if (extracted.amount && !document.getElementById('fAmount').value) {
+    document.getElementById('fAmount').value = extracted.amount;
+  }
+  if (extracted.customerName && !document.getElementById('fCustomerName').value) {
+    document.getElementById('fCustomerName').value = extracted.customerName;
+    // Si ese cliente ya existe, autocompletar email
+    const existing = findCustomerByName(extracted.customerName);
+    if (existing) {
+      if (existing.email) document.getElementById('fCustomerEmail').value = existing.email;
+      if (existing.greetingName) document.getElementById('fGreetingName').value = existing.greetingName;
+      if (existing.spaModel && !document.getElementById('fSpaModel').value) document.getElementById('fSpaModel').value = existing.spaModel;
+      if (existing.serialNumber && !document.getElementById('fSerial').value) document.getElementById('fSerial').value = existing.serialNumber;
+    }
+  }
+  if (extracted.serviceDate && !document.getElementById('fServiceDate').value) {
+    document.getElementById('fServiceDate').value = extracted.serviceDate;
+  }
+  if (extracted.serviceDescription && !document.getElementById('fServiceDesc').value) {
+    document.getElementById('fServiceDesc').value = extracted.serviceDescription;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// EMAIL HTML BODY (FORMATO BONITO)
+// ════════════════════════════════════════════════════════════
+function buildEmailHtmlBody(inv) {
+  const greet = inv.greetingName || deriveGreetingName(inv.customerName) || 'there';
+  const dateStr = inv.serviceDate 
+    ? new Date(inv.serviceDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) 
+    : '';
+  const techLine = inv.technician ? `<tr><td style="padding:8px 0; color:#666; font-size:14px;">Service performed by:</td><td style="padding:8px 0; font-weight:600; color:#0f172a;">${escapeHtml(inv.technician)}</td></tr>` : '';
+  const descLine = inv.serviceDescription ? `<tr><td style="padding:8px 0; color:#666; font-size:14px;">Service:</td><td style="padding:8px 0; font-weight:600; color:#0f172a;">${escapeHtml(inv.serviceDescription)}</td></tr>` : '';
+  const spaLine = inv.spaModel ? `<tr><td style="padding:8px 0; color:#666; font-size:14px;">Spa:</td><td style="padding:8px 0; color:#0f172a;">${escapeHtml(inv.spaModel)}${inv.serialNumber ? ' · S/N ' + escapeHtml(inv.serialNumber) : ''}</td></tr>` : '';
+  
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0; padding:0; background:#f5f5f0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#f5f5f0; padding:32px 16px;">
+<tr><td align="center">
+
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width:600px; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+    
+    <!-- HEADER -->
+    <tr>
+      <td style="background:#0f172a; padding:32px 36px; text-align:left;">
+        <div style="color:#ffffff; font-size:11px; letter-spacing:2px; text-transform:uppercase; font-weight:700; opacity:0.7;">ASPEN SPAS</div>
+        <div style="color:#ffffff; font-size:24px; font-weight:800; margin-top:6px; letter-spacing:-0.02em;">Invoice #${escapeHtml(inv.invoiceNumber)}</div>
+      </td>
+    </tr>
+    
+    <!-- BODY -->
+    <tr>
+      <td style="padding:32px 36px;">
+        <p style="margin:0 0 16px 0; font-size:16px; color:#0f172a; line-height:1.5;">Hi ${escapeHtml(greet)},</p>
+        <p style="margin:0 0 24px 0; font-size:15px; color:#475569; line-height:1.6;">
+          Thank you for choosing <strong style="color:#0f172a;">Aspen Spas</strong>. Please find your invoice attached for the recent service.
+        </p>
+
+        <!-- INVOICE DETAILS BOX -->
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin:24px 0;">
+          <tr><td>
+            <div style="font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:#64748b; font-weight:700; margin-bottom:12px;">Invoice Details</div>
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+              <tr>
+                <td style="padding:8px 0; color:#666; font-size:14px; width:140px;">Invoice number:</td>
+                <td style="padding:8px 0; font-weight:700; color:#0f172a; font-family:'SF Mono',Monaco,'Courier New',monospace;">#${escapeHtml(inv.invoiceNumber)}</td>
+              </tr>
+              ${dateStr ? `<tr><td style="padding:8px 0; color:#666; font-size:14px;">Service date:</td><td style="padding:8px 0; color:#0f172a;">${dateStr}</td></tr>` : ''}
+              ${techLine}
+              ${descLine}
+              ${spaLine}
+              <tr>
+                <td colspan="2" style="padding:12px 0 0 0; border-top:1px solid #e2e8f0; margin-top:8px;"></td>
+              </tr>
+              <tr>
+                <td style="padding:12px 0 0 0; color:#666; font-size:14px;">Amount due:</td>
+                <td style="padding:12px 0 0 0; font-weight:800; color:#0f172a; font-size:22px; font-family:'SF Mono',Monaco,'Courier New',monospace;">${fmtCurrency(inv.amount)}</td>
+              </tr>
+            </table>
+          </td></tr>
+        </table>
+
+        <p style="margin:24px 0 16px 0; font-size:15px; color:#475569; line-height:1.6;">
+          If you have any questions about this invoice or the service performed, just reply to this email — we read every one — or call us at <a href="tel:${COMPANY_PHONE.replace(/[^\d]/g, '')}" style="color:#0369a1; text-decoration:none; font-weight:600;">${escapeHtml(COMPANY_PHONE)}</a>.
+        </p>
+        <p style="margin:0 0 8px 0; font-size:15px; color:#475569;">Thank you for your business,</p>
+        <p style="margin:0; font-size:15px; color:#0f172a; font-weight:700;">${escapeHtml(FROM_NAME)}</p>
+      </td>
+    </tr>
+    
+    <!-- FOOTER -->
+    <tr>
+      <td style="background:#f8fafc; padding:20px 36px; text-align:center; border-top:1px solid #e2e8f0;">
+        <div style="font-size:13px; color:#64748b;">
+          <a href="mailto:service1@aspenspas.com" style="color:#475569; text-decoration:none;">service1@aspenspas.com</a>
+          &nbsp;·&nbsp;
+          <a href="tel:${COMPANY_PHONE.replace(/[^\d]/g, '')}" style="color:#475569; text-decoration:none;">${escapeHtml(COMPANY_PHONE)}</a>
+          &nbsp;·&nbsp;
+          <a href="https://${COMPANY_WEBSITE}" style="color:#475569; text-decoration:none;">${escapeHtml(COMPANY_WEBSITE)}</a>
+        </div>
+      </td>
+    </tr>
+    
+  </table>
+
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+function buildEmailPlainText(inv) {
+  const greet = inv.greetingName || deriveGreetingName(inv.customerName) || 'there';
+  const dateStr = inv.serviceDate 
+    ? new Date(inv.serviceDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) 
+    : '';
+  const techLine = inv.technician ? `\nService performed by: ${inv.technician}` : '';
+  
+  return `Hi ${greet},
+
+Thank you for choosing Aspen Spas. Please find your invoice attached for the recent service.
+
+Invoice details:
+  Invoice number:  #${inv.invoiceNumber}
+  Service date:    ${dateStr}
+  Amount due:      ${fmtCurrency(inv.amount)}${techLine}
+
+If you have any questions, just reply to this email or call us at ${COMPANY_PHONE}.
+
+Thank you for your business,
+${FROM_NAME}
+service1@aspenspas.com  |  ${COMPANY_PHONE}  |  ${COMPANY_WEBSITE}`;
+}
+
+// ════════════════════════════════════════════════════════════
+// .EML FILE GENERATION (con PDF adjunto)
+// ════════════════════════════════════════════════════════════
+function buildEmlFile(inv, pdfBase64, pdfFilename) {
+  const boundary = '====aspen_' + Math.random().toString(36).slice(2, 12) + '====';
+  const altBoundary = '====alt_' + Math.random().toString(36).slice(2, 12) + '====';
+  const emailDate = new Date().toUTCString();
+  
+  const subject = buildEmailSubject(inv);
+  const htmlBody = buildEmailHtmlBody(inv);
+  const plainText = buildEmailPlainText(inv);
+  
+  // Wrap base64 a 76 chars/línea (RFC 2045)
+  const wrappedB64 = pdfBase64 ? pdfBase64.match(/.{1,76}/g).join('\r\n') : '';
+  
+  const lines = [
+    `From: "${FROM_NAME}" <service1@aspenspas.com>`,
+    `To: ${inv.customerEmail}`,
+    `Subject: ${subject}`,
+    `Date: ${emailDate}`,
+    `MIME-Version: 1.0`,
+    pdfBase64 
+      ? `Content-Type: multipart/mixed; boundary="${boundary}"`
+      : `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+    ``
+  ];
+  
+  if (pdfBase64) {
+    // Wrapper multipart/mixed > multipart/alternative > body parts + attachment
+    lines.push(
+      `--${boundary}`,
+      `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+      ``,
+      `--${altBoundary}`,
+      `Content-Type: text/plain; charset=utf-8`,
+      `Content-Transfer-Encoding: quoted-printable`,
+      ``,
+      encodeQuotedPrintable(plainText),
+      ``,
+      `--${altBoundary}`,
+      `Content-Type: text/html; charset=utf-8`,
+      `Content-Transfer-Encoding: quoted-printable`,
+      ``,
+      encodeQuotedPrintable(htmlBody),
+      ``,
+      `--${altBoundary}--`,
+      ``,
+      `--${boundary}`,
+      `Content-Type: application/pdf; name="${pdfFilename}"`,
+      `Content-Disposition: attachment; filename="${pdfFilename}"`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      wrappedB64,
+      ``,
+      `--${boundary}--`
+    );
+  } else {
+    // Sin attachment: solo multipart/alternative
+    lines.push(
+      `--${altBoundary}`,
+      `Content-Type: text/plain; charset=utf-8`,
+      `Content-Transfer-Encoding: quoted-printable`,
+      ``,
+      encodeQuotedPrintable(plainText),
+      ``,
+      `--${altBoundary}`,
+      `Content-Type: text/html; charset=utf-8`,
+      `Content-Transfer-Encoding: quoted-printable`,
+      ``,
+      encodeQuotedPrintable(htmlBody),
+      ``,
+      `--${altBoundary}--`
+    );
+  }
+  
+  return lines.join('\r\n');
+}
+
+function encodeQuotedPrintable(str) {
+  // Encode UTF-8 bytes as quoted-printable
+  const utf8 = unescape(encodeURIComponent(str));
+  let result = '';
+  for (let i = 0; i < utf8.length; i++) {
+    const c = utf8.charCodeAt(i);
+    if (c === 0x3D) result += '=3D';
+    else if (c >= 0x20 && c <= 0x7E && c !== 0x3D) result += utf8[i];
+    else if (c === 0x0A) result += '\r\n';
+    else if (c === 0x0D) continue;
+    else if (c === 0x09 || c === 0x20) result += utf8[i];
+    else result += '=' + c.toString(16).toUpperCase().padStart(2, '0');
+  }
+  // Wrap lines a 76 chars
+  const wrapped = result.split('\r\n').map(line => {
+    if (line.length <= 76) return line;
+    let out = '';
+    let pos = 0;
+    while (pos < line.length) {
+      let chunk = line.slice(pos, pos + 75);
+      // No cortar en medio de =XX
+      if (chunk.endsWith('=')) chunk = chunk.slice(0, -1);
+      else if (chunk.length >= 2 && chunk.charAt(chunk.length - 2) === '=') chunk = chunk.slice(0, -2);
+      out += chunk + (pos + chunk.length < line.length ? '=\r\n' : '');
+      pos += chunk.length;
+    }
+    return out;
+  }).join('\r\n');
+  return wrapped;
+}
+
+window.generateEmlAndDownload = function() {
+  const inv = allInvoices.find(i => i.id === sendingId);
+  if (!inv) return;
+  
+  const pdfBase64 = inv.pdfBase64 || null;
+  const pdfFilename = inv.pdfFilename || `Invoice_${inv.invoiceNumber}.pdf`;
+  
+  const emlContent = buildEmlFile(inv, pdfBase64, pdfFilename);
+  const blob = new Blob([emlContent], { type: 'message/rfc822' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Invoice_${inv.invoiceNumber}_for_${(inv.customerName || 'customer').replace(/[^a-zA-Z0-9]/g, '_')}.eml`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  
+  toast(pdfBase64 ? 'Email descargado con PDF adjunto. Doble click en el .eml para abrirlo' : 'Email descargado (sin PDF). Doble click para abrir', 'success');
+};
+
+// ════════════════════════════════════════════════════════════
+// AUTOCOMPLETE DE CLIENTE EN FORMULARIO DE FACTURA
+// ════════════════════════════════════════════════════════════
+window.onCustomerInput = function(e) {
+  const q = e.target.value.trim().toLowerCase();
+  const list = document.getElementById('customerSuggestions');
+  if (!q || allCustomers.length === 0) {
+    list.classList.remove('open');
+    return;
+  }
+  const matches = allCustomers
+    .filter(c => (c.name || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q))
+    .slice(0, 8);
+  if (matches.length === 0) {
+    list.classList.remove('open');
+    return;
+  }
+  list.innerHTML = matches.map(c => `
+    <div class="autocomplete-item" onmousedown="window.pickCustomer('${c.id}')">
+      <span class="autocomplete-item-name">${escapeHtml(c.name)}</span>
+      <span class="autocomplete-item-meta">${escapeHtml(c.email || '—')}${c.spaModel ? ' · ' + escapeHtml(c.spaModel) : ''}</span>
+    </div>
+  `).join('');
+  list.classList.add('open');
+};
+
+window.pickCustomer = function(id) {
+  const c = allCustomers.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('fCustomerName').value = c.name || '';
+  document.getElementById('fGreetingName').value = c.greetingName || '';
+  document.getElementById('fCustomerEmail').value = c.email || '';
+  document.getElementById('fSpaModel').value = c.spaModel || '';
+  document.getElementById('fSerial').value = c.serialNumber || '';
+  document.getElementById('customerSuggestions').classList.remove('open');
+  toast(`Cliente "${c.name}" autocompletado`, 'success');
+};
+
+// ════════════════════════════════════════════════════════════
+// MODAL DE CLIENTE
+// ════════════════════════════════════════════════════════════
+window.openAddCustomerModal = function() {
+  editingCustomerId = null;
+  document.getElementById('customerFormTitle').textContent = 'Agregar cliente';
+  document.getElementById('customerSaveBtn').textContent = 'Guardar';
+  document.getElementById('customerDeleteBtn').style.display = 'none';
+  ['cName','cGreeting','cEmail','cPhone','cSpaModel','cAddress','cSerial','cCabinet','cNotes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('customerModal').classList.add('open');
+  setTimeout(() => document.getElementById('cName').focus(), 100);
+};
+
+window.openEditCustomerModal = function(id) {
+  const c = allCustomers.find(x => x.id === id);
+  if (!c) return;
+  editingCustomerId = id;
+  document.getElementById('customerFormTitle').textContent = `Editar: ${c.name}`;
+  document.getElementById('customerSaveBtn').textContent = 'Actualizar';
+  document.getElementById('customerDeleteBtn').style.display = 'inline-flex';
+  document.getElementById('cName').value = c.name || '';
+  document.getElementById('cGreeting').value = c.greetingName || '';
+  document.getElementById('cEmail').value = c.email || '';
+  document.getElementById('cPhone').value = c.phone || '';
+  document.getElementById('cSpaModel').value = c.spaModel || '';
+  document.getElementById('cAddress').value = c.address || '';
+  document.getElementById('cSerial').value = c.serialNumber || '';
+  document.getElementById('cCabinet').value = c.cabinet || '';
+  document.getElementById('cNotes').value = c.notes || '';
+  document.getElementById('customerModal').classList.add('open');
+};
+
+window.saveCustomer = async function() {
+  const data = {
+    name: document.getElementById('cName').value.trim(),
+    greetingName: document.getElementById('cGreeting').value.trim(),
+    email: document.getElementById('cEmail').value.trim(),
+    phone: document.getElementById('cPhone').value.trim(),
+    spaModel: document.getElementById('cSpaModel').value.trim(),
+    address: document.getElementById('cAddress').value.trim(),
+    serialNumber: document.getElementById('cSerial').value.trim(),
+    cabinet: document.getElementById('cCabinet').value.trim(),
+    notes: document.getElementById('cNotes').value.trim()
+  };
+  if (!data.name || !data.email) {
+    toast('Nombre y email son requeridos', 'error');
+    return;
+  }
+  if (editingCustomerId) {
+    await updateCustomerData(editingCustomerId, data);
+    toast('Cliente actualizado', 'success');
+  } else {
+    await createCustomer(data);
+    toast('Cliente agregado', 'success');
+  }
+  closeModal('customerModal');
+};
+
+window.deleteCurrentCustomer = async function() {
+  if (!editingCustomerId) return;
+  const c = allCustomers.find(x => x.id === editingCustomerId);
+  if (!confirm(`¿Eliminar a "${c.name}" de tu lista de clientes? Las facturas existentes no se afectan.`)) return;
+  await deleteCustomer(editingCustomerId);
+  toast('Cliente eliminado', 'success');
+  closeModal('customerModal');
+};
+
+// ════════════════════════════════════════════════════════════
+// EXPORT CSV
+// ════════════════════════════════════════════════════════════
+window.exportCSV = function() {
+  if (allInvoices.length === 0) {
+    toast('No hay facturas para exportar', 'error');
+    return;
+  }
+  const headers = ['Invoice #', 'Customer', 'Email', 'Amount', 'Status', 'Service Date', 'Technician', 'Created', 'Sent', 'Paid'];
+  const rows = allInvoices.map(i => {
+    const s = deriveStatus(i);
+    return [
+      i.invoiceNumber, i.customerName, i.customerEmail, i.amount,
+      statusLabel(s), i.serviceDate || '', i.technician || '',
+      i.createdAt ? new Date(i.createdAt).toLocaleDateString() : '',
+      i.sentAt ? new Date(i.sentAt).toLocaleDateString() : '',
+      i.paidAt ? new Date(i.paidAt).toLocaleDateString() : ''
+    ];
+  });
+  const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `aspen-invoices-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV exportado', 'success');
+};
+
+// ════════════════════════════════════════════════════════════
+// TOAST NOTIFICATIONS
+// ════════════════════════════════════════════════════════════
+let toastTimer;
+function toast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ════════════════════════════════════════════════════════════
+// EVENT LISTENERS
+// ════════════════════════════════════════════════════════════
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentFilter = tab.dataset.filter;
+    computeAndRender();
+  });
+});
+
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  searchTerm = e.target.value;
+  computeAndRender();
+});
+
+document.querySelectorAll('.modal-backdrop').forEach(m => {
+  m.addEventListener('click', (e) => {
+    if (e.target === m) m.classList.remove('open');
+  });
+});
+
+document.getElementById('fCustomerName').addEventListener('blur', (e) => {
+  const greetingField = document.getElementById('fGreetingName');
+  if (!greetingField.value) {
+    greetingField.placeholder = 'Auto: ' + (deriveGreetingName(e.target.value) || '—');
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+// START
+// ════════════════════════════════════════════════════════════
+initFirebase();
+window.toast = toast;
+</script>
+
+</body>
+</html>
