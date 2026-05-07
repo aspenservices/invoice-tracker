@@ -1715,6 +1715,12 @@ Mahogany Durawood..."></textarea>
           <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:6px;" data-i18n="payment.note.label">Nota interna del cobro</label>
           <textarea id="psNote" data-i18n-ph="payment.note.ph" placeholder="Ej: Cliente pidió volver a llamar el lunes" style="width:100%;min-height:60px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;"></textarea>
         </div>
+        <!-- ─── ALERT HISTORY (only shown if there are internal alerts) ─── -->
+        <div id="psAlertHistory" style="display:none;">
+          <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:6px;">📨 <span data-i18n="payment.alerts.title">Alertas internas enviadas</span></label>
+          <div id="psAlertHistoryList" style="background:#F1F5F9;border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px;font-size:12px;line-height:1.6;"></div>
+          <div style="font-size:10.5px;color:var(--text-mute);margin-top:4px;font-style:italic;" data-i18n="payment.alerts.hint">El sistema generó este email — confirma en Outlook → Sent que se envió.</div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1871,6 +1877,8 @@ const I18N = {
     'payment.check.location.other': 'Otro / desconocido',
     'payment.check.notify': 'Notificar equipo de depósitos (con PDF adjunto)',
     'payment.check.notify.hint': 'Genera un email con la info del cheque y PDF de la factura, para que la oficina sepa qué cobrar y dónde está.',
+    'payment.alerts.title': 'Alertas internas enviadas',
+    'payment.alerts.hint': 'El sistema generó este email — confirma en Outlook → Sent que se envió.',
     'payment.reason.label': 'Motivo de no cobro',
     'payment.reason.cc_needed': '📞 Falta CC en archivo',
     'payment.reason.cc_declined': '❌ CC declinada',
@@ -2066,6 +2074,8 @@ const I18N = {
     'payment.check.location.other': 'Other / unknown',
     'payment.check.notify': 'Notify deposit team (with PDF attached)',
     'payment.check.notify.hint': 'Generates an email with check info and invoice PDF, so the office knows what to deposit and where it is.',
+    'payment.alerts.title': 'Internal alerts generated',
+    'payment.alerts.hint': 'The system generated this email — confirm in Outlook → Sent that it was actually sent.',
     'payment.reason.label': 'Reason for no payment',
     'payment.reason.cc_needed': '📞 No CC on file',
     'payment.reason.cc_declined': '❌ CC declined',
@@ -4892,6 +4902,44 @@ window.openPaymentModal = function(id) {
   // Show/hide check tracking section based on selected method
   const checkBlock = document.getElementById('psCheckTracking');
   checkBlock.style.display = (psSelectedMethod === 'check') ? 'block' : 'none';
+  
+  // Populate alert history (audit trail)
+  const alertEvents = (inv.history || []).filter(h => h.action === 'alert_collections' || h.action === 'alert_check');
+  const alertHistDiv = document.getElementById('psAlertHistory');
+  const alertHistList = document.getElementById('psAlertHistoryList');
+  if (alertEvents.length > 0) {
+    const en = currentLang === 'en';
+    alertHistList.innerHTML = alertEvents.slice().reverse().map(ev => {
+      const when = new Date(ev.ts);
+      const whenStr = when.toLocaleString();
+      const icon = ev.action === 'alert_check' ? '💵' : '🚨';
+      const typeLabel = ev.action === 'alert_check'
+        ? (en ? 'Check tracking alert' : 'Alerta de tracking de cheque')
+        : (en ? 'Collections alert' : 'Alerta de cobros');
+      let extra = '';
+      if (ev.action === 'alert_check' && ev.location) {
+        const locMap = {
+          with_tech: en ? `with tech ${ev.technician || ''}` : `con técnico ${ev.technician || ''}`,
+          office: en ? 'in office' : 'en oficina',
+          deposited: en ? 'deposited' : 'depositado',
+          other: en ? 'other' : 'otro'
+        };
+        extra = ` — 📍 ${locMap[ev.location] || ev.location}`;
+      }
+      if (ev.action === 'alert_collections' && ev.reason) {
+        const reasonMap = {
+          cc_declined: en ? 'CC declined' : 'CC rechazada',
+          cc_needed: en ? 'No CC on file' : 'Falta CC'
+        };
+        extra = ` — ${reasonMap[ev.reason] || ev.reason}`;
+      }
+      const pdfNote = ev.hasPdf ? ' 📎' : '';
+      return `<div style="padding:4px 0;border-bottom:1px solid var(--border);">${icon} <strong>${escapeHtml(typeLabel)}</strong>${pdfNote}<br>→ ${escapeHtml(ev.recipientName || '')} (${escapeHtml(ev.recipient || '—')})${extra}<br><span style="color:var(--text-mute);font-size:11px;">${escapeHtml(whenStr)}</span></div>`;
+    }).join('');
+    alertHistDiv.style.display = 'block';
+  } else {
+    alertHistDiv.style.display = 'none';
+  }
 
   // Highlight selected radios
   document.querySelectorAll('#psReasonGroup .ps-radio').forEach(r => {
@@ -5002,7 +5050,7 @@ function offerCollectionsNotification(invoiceId, reason) {
 }
 
 // Generate an .eml internal alert addressed to the collections team
-function generateCollectionsEml(inv, reason) {
+async function generateCollectionsEml(inv, reason) {
   const collectionsEmail = (savedSettings.collectionsEmail || '').trim();
   const collectionsName = (savedSettings.collectionsName || '').trim();
   const en = currentLang === 'en';
@@ -5168,9 +5216,21 @@ function generateCollectionsEml(inv, reason) {
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
   
   const hasPdf = !!pdfBase64;
+  // ─── Log to invoice history (audit trail) ───
+  const histEntry = {
+    ts: Date.now(),
+    action: 'alert_collections',
+    recipient: collectionsEmail,
+    recipientName: collectionsName || 'Collections team',
+    reason: reason,
+    hasPdf: hasPdf
+  };
+  const newHistory = [...(inv.history || []), histEntry];
+  await updateInvoiceData(inv.id, { history: newHistory });
+  
   toast(en
-    ? `✉ Internal alert .eml downloaded ${hasPdf ? 'WITH PDF attached' : '(no PDF — invoice has no PDF saved)'}. Double-click to open in Outlook → click Send.`
-    : `✉ Alerta interna .eml descargada ${hasPdf ? 'CON PDF adjunto' : '(sin PDF — factura no tiene PDF guardado)'}. Doble click para abrir en Outlook → dale Send.`,
+    ? `✉ Internal alert .eml downloaded ${hasPdf ? 'WITH PDF attached' : '(no PDF — invoice has no PDF saved)'}. Double-click to open in Outlook → click Send. (Logged to invoice history)`
+    : `✉ Alerta interna .eml descargada ${hasPdf ? 'CON PDF adjunto' : '(sin PDF — factura no tiene PDF guardado)'}. Doble click para abrir en Outlook → dale Send. (Registrado en historial de la factura)`,
     'success');
 }
 
@@ -5178,7 +5238,7 @@ function generateCollectionsEml(inv, reason) {
 // CHECK TRACKING — notify deposit team about a check that needs depositing
 // Generates a .eml with PDF attached, ready to send via Outlook
 // ════════════════════════════════════════════════════════════
-window.notifyDepositTeam = function() {
+window.notifyDepositTeam = async function() {
   if (!psEditingId) return;
   const inv = allInvoices.find(i => i.id === psEditingId);
   if (!inv) return;
@@ -5369,9 +5429,23 @@ window.notifyDepositTeam = function() {
   a.click();
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
   
+  // ─── Log to invoice history (audit trail) ───
+  const histEntry = {
+    ts: Date.now(),
+    action: 'alert_check',
+    recipient: collectionsEmail,
+    recipientName: collectionsName || 'Deposit team',
+    location: checkLocation,
+    checkRef: checkRef,
+    technician: inv.technician || null,
+    hasPdf: !!pdfBase64
+  };
+  const newHistory = [...(inv.history || []), histEntry];
+  await updateInvoiceData(inv.id, { history: newHistory });
+  
   toast(en
-    ? `✉ Check tracking .eml downloaded ${pdfBase64 ? 'WITH PDF attached' : '(no PDF)'}. Open with Outlook → click Send.`
-    : `✉ .eml de tracking de cheque descargado ${pdfBase64 ? 'CON PDF adjunto' : '(sin PDF)'}. Abre con Outlook → dale Send.`,
+    ? `✉ Check tracking .eml downloaded ${pdfBase64 ? 'WITH PDF attached' : '(no PDF)'}. Open with Outlook → click Send. (Logged to invoice history)`
+    : `✉ .eml de tracking de cheque descargado ${pdfBase64 ? 'CON PDF adjunto' : '(sin PDF)'}. Abre con Outlook → dale Send. (Registrado en historial de la factura)`,
     'success');
 };
 
@@ -6542,6 +6616,20 @@ function renderInvoiceCardHtml(inv) {
   const checkPendingPill = (inv.paymentMethod === 'check' && inv.checkLocation && inv.checkLocation !== 'deposited' && s !== 'paid') 
     ? `<span class="payment-pill" style="background:#FEF9C3;color:#854D0E;border:1px solid #FDE047;">📝 ${currentLang === 'en' ? 'CHECK PENDING DEPOSIT' : 'CHEQUE SIN DEPOSITAR'}${inv.checkLocation === 'with_tech' && inv.technician ? ' · ' + escapeHtml(inv.technician) : ''}${inv.checkLocation === 'office' ? ' · ' + (currentLang === 'en' ? 'In office' : 'En oficina') : ''}</span>`
     : '';
+  // Internal alerts badge — shows when alerts have been generated for this invoice
+  const alertEvents = (inv.history || []).filter(h => h.action === 'alert_collections' || h.action === 'alert_check');
+  const lastAlert = alertEvents[alertEvents.length - 1];
+  const alertBadge = lastAlert ? (() => {
+    const when = new Date(lastAlert.ts);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const isToday = when.getTime() >= today.getTime();
+    const timeStr = isToday 
+      ? when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+      : when.toLocaleDateString();
+    const icon = lastAlert.action === 'alert_check' ? '💵' : '🚨';
+    const recipient = escapeHtml(lastAlert.recipientName || 'Cobros');
+    return `<span style="font-size:10px;color:#0F172A;background:#DBEAFE;padding:2px 8px;border-radius:999px;font-weight:600;border:1px solid #93C5FD;" title="${escapeHtml(currentLang === 'en' ? `Alert generated for ${recipient} at ${when.toLocaleString()}. ${alertEvents.length} alert(s) total.` : `Alerta generada para ${recipient} a las ${when.toLocaleString()}. ${alertEvents.length} alerta(s) en total.`)}">${icon} ${currentLang === 'en' ? 'Alerted' : 'Alertado'}: ${recipient} · ${timeStr}${alertEvents.length > 1 ? ` (×${alertEvents.length})` : ''}</span>`;
+  })() : '';
   const ccBadge = inv.ccRequested && s !== 'paid' ? `<span style="font-size:10px;color:var(--sent);font-weight:600;" title="${escapeHtml(t('card.ccRequestedTitle'))}">${escapeHtml(t('card.ccRequested'))}</span>` : '';
   const fuLabel = inv.nextFollowUp && s !== 'paid' ? `<span style="color:var(--followup);font-size:11px;">${escapeHtml(t('card.followupOn', inv.nextFollowUp))}</span>` : '';
   // Snooze indicator
@@ -6573,6 +6661,7 @@ function renderInvoiceCardHtml(inv) {
           ${ccBadge}
           ${fuLabel}
           ${snoozeLabel}
+          ${alertBadge}
         </div>
       </div>
       <div class="invoice-amount">${fmtCurrency(inv.amount)}</div>
