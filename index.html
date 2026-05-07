@@ -3797,6 +3797,7 @@ function buildEmlFile(inv, pdfBase64, pdfFilename, stage) {
     `To: ${inv.customerEmail}`,
     `Subject: ${subject}`,
     `Date: ${emailDate}`,
+    `X-Unsent: 1`,
     `MIME-Version: 1.0`,
     pdfBase64 
       ? `Content-Type: multipart/mixed; boundary="${boundary}"`
@@ -5027,10 +5028,11 @@ function generateCollectionsEml(inv, reason) {
   const wrappedB64 = pdfBase64 ? pdfBase64.match(/.{1,76}/g).join('\r\n') : '';
   
   const emlLines = [
-    `From: "${savedSettings.fromName || 'Aspen Spas Invoice Tracker'}" <noreply@aspenspas.com>`,
+    `From: "${savedSettings.fromName || 'Aspen Spas Service'}" <service1@aspenspas.com>`,
     `To: "${collectionsName || 'Collections'}" <${collectionsEmail}>`,
     `Subject: ${subject}`,
     `Date: ${new Date().toUTCString()}`,
+    `X-Unsent: 1`,
     `MIME-Version: 1.0`,
     pdfBase64 
       ? `Content-Type: multipart/mixed; boundary="${boundary}"`
