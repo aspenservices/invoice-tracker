@@ -1674,6 +1674,22 @@ Mahogany Durawood..."></textarea>
             <div class="ps-radio" data-method="other" data-i18n="payment.method.other">❓ Otro</div>
           </div>
           <input type="text" id="psMethodRef" data-i18n-ph="payment.method.ref.ph" placeholder="# de cheque / últimos 4 de CC / referencia (opcional)" style="width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px;">
+          
+          <!-- ─── CHECK TRACKING (only shown when method = check) ─── -->
+          <div id="psCheckTracking" style="display:none;margin-top:12px;padding:12px;background:#FEF9C3;border:1px solid #FDE047;border-radius:var(--r-md);">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#854D0E;display:block;margin-bottom:6px;">📍 <span data-i18n="payment.check.location.title">Ubicación del cheque</span></label>
+            <select id="psCheckLocation" style="width:100%;padding:8px 10px;border:1px solid #FDE047;border-radius:var(--r-sm);font-size:12px;background:white;">
+              <option value="" data-i18n="payment.check.location.choose">— Seleccionar —</option>
+              <option value="with_tech" data-i18n="payment.check.location.with_tech">Con el técnico (no entregado a oficina)</option>
+              <option value="office" data-i18n="payment.check.location.office">Llegó a oficina (pendiente depositar)</option>
+              <option value="deposited" data-i18n="payment.check.location.deposited">Depositado en banco</option>
+              <option value="other" data-i18n="payment.check.location.other">Otro / desconocido</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="window.notifyDepositTeam()" style="margin-top:8px;width:100%;font-size:12px;padding:8px;">
+              📨 <span data-i18n="payment.check.notify">Notificar equipo de depósitos (con PDF adjunto)</span>
+            </button>
+            <div style="font-size:10.5px;color:#854D0E;margin-top:6px;line-height:1.4;" data-i18n="payment.check.notify.hint">Genera un email con la info del cheque y PDF de la factura, para que la oficina sepa qué cobrar y dónde está.</div>
+          </div>
         </div>
         <div>
           <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:8px;" data-i18n="payment.reason.label">Motivo de no cobro</label>
@@ -1847,6 +1863,14 @@ const I18N = {
     'payment.method.square': '⬛ Square',
     'payment.method.other': '❓ Otro',
     'payment.method.ref.ph': '# de cheque / últimos 4 de CC / referencia (opcional)',
+    'payment.check.location.title': 'Ubicación del cheque',
+    'payment.check.location.choose': '— Seleccionar —',
+    'payment.check.location.with_tech': 'Con el técnico (no entregado a oficina)',
+    'payment.check.location.office': 'Llegó a oficina (pendiente depositar)',
+    'payment.check.location.deposited': 'Depositado en banco',
+    'payment.check.location.other': 'Otro / desconocido',
+    'payment.check.notify': 'Notificar equipo de depósitos (con PDF adjunto)',
+    'payment.check.notify.hint': 'Genera un email con la info del cheque y PDF de la factura, para que la oficina sepa qué cobrar y dónde está.',
     'payment.reason.label': 'Motivo de no cobro',
     'payment.reason.cc_needed': '📞 Falta CC en archivo',
     'payment.reason.cc_declined': '❌ CC declinada',
@@ -2034,6 +2058,14 @@ const I18N = {
     'payment.method.square': '⬛ Square',
     'payment.method.other': '❓ Other',
     'payment.method.ref.ph': 'Check # / last 4 of CC / reference (optional)',
+    'payment.check.location.title': 'Check location',
+    'payment.check.location.choose': '— Select —',
+    'payment.check.location.with_tech': 'With technician (not delivered to office)',
+    'payment.check.location.office': 'Arrived at office (pending deposit)',
+    'payment.check.location.deposited': 'Deposited at bank',
+    'payment.check.location.other': 'Other / unknown',
+    'payment.check.notify': 'Notify deposit team (with PDF attached)',
+    'payment.check.notify.hint': 'Generates an email with check info and invoice PDF, so the office knows what to deposit and where it is.',
     'payment.reason.label': 'Reason for no payment',
     'payment.reason.cc_needed': '📞 No CC on file',
     'payment.reason.cc_declined': '❌ CC declined',
@@ -4856,6 +4888,10 @@ window.openPaymentModal = function(id) {
   document.getElementById('psNextFollowup').value = inv.nextFollowUp || '';
   document.getElementById('psNote').value = inv.paymentNote || '';
   document.getElementById('psMethodRef').value = inv.paymentRef || '';
+  document.getElementById('psCheckLocation').value = inv.checkLocation || '';
+  // Show/hide check tracking section based on selected method
+  const checkBlock = document.getElementById('psCheckTracking');
+  checkBlock.style.display = (psSelectedMethod === 'check') ? 'block' : 'none';
 
   // Highlight selected radios
   document.querySelectorAll('#psReasonGroup .ps-radio').forEach(r => {
@@ -4874,6 +4910,7 @@ window.savePaymentStatus = async function() {
     paymentReason: psSelectedReason || null,
     paymentMethod: psSelectedMethod || null,
     paymentRef: document.getElementById('psMethodRef').value.trim() || null,
+    checkLocation: psSelectedMethod === 'check' ? (document.getElementById('psCheckLocation').value || null) : null,
     ccRequested: document.getElementById('psCcRequested').checked,
     ccRequestedAt: document.getElementById('psCcRequested').checked ? Date.now() : null,
     nextFollowUp: document.getElementById('psNextFollowup').value || null,
@@ -5105,6 +5142,207 @@ function generateCollectionsEml(inv, reason) {
     'success');
 }
 
+// ════════════════════════════════════════════════════════════
+// CHECK TRACKING — notify deposit team about a check that needs depositing
+// Generates a .eml with PDF attached, ready to send via Outlook
+// ════════════════════════════════════════════════════════════
+window.notifyDepositTeam = function() {
+  if (!psEditingId) return;
+  const inv = allInvoices.find(i => i.id === psEditingId);
+  if (!inv) return;
+  
+  const collectionsEmail = (savedSettings.collectionsEmail || '').trim();
+  const collectionsName = (savedSettings.collectionsName || '').trim();
+  const en = currentLang === 'en';
+  
+  if (!collectionsEmail) {
+    if (confirm(en
+      ? 'No deposit team email configured. The system uses the same email as the collections team.\n\nOpen Settings to set it up?'
+      : 'No hay email del equipo de depósitos configurado. El sistema usa el mismo email que el equipo de cobros.\n\n¿Abrir Settings para configurarlo?')) {
+      window.openSettingsModal();
+    }
+    return;
+  }
+  
+  // Read current values from modal (might not be saved yet)
+  const checkRef = document.getElementById('psMethodRef').value.trim();
+  const checkLocation = document.getElementById('psCheckLocation').value || '';
+  const checkNote = document.getElementById('psNote').value.trim();
+  
+  // Localized location labels
+  const locLabels = {
+    with_tech: en ? `With technician ${inv.technician || '(unknown)'}` : `Con el técnico ${inv.technician || '(desconocido)'}`,
+    office: en ? 'Arrived at office (pending deposit)' : 'Llegó a oficina (pendiente depositar)',
+    deposited: en ? 'Already deposited at bank' : 'Ya depositado en banco',
+    other: en ? 'Other / unknown' : 'Otro / desconocido',
+    '': en ? '(not specified)' : '(sin especificar)'
+  };
+  const locLabel = locLabels[checkLocation] || locLabels[''];
+  
+  // Determine action needed based on location
+  let actionText;
+  if (checkLocation === 'with_tech') {
+    actionText = en
+      ? `Please retrieve the check from technician ${inv.technician || ''} and deposit at the bank.`
+      : `Por favor recoger el cheque del técnico ${inv.technician || ''} y depositar en el banco.`;
+  } else if (checkLocation === 'office') {
+    actionText = en
+      ? 'Please deposit this check at the bank.'
+      : 'Por favor depositar este cheque en el banco.';
+  } else if (checkLocation === 'deposited') {
+    actionText = en
+      ? 'Check already deposited — this is just a confirmation/record.'
+      : 'Cheque ya depositado — esta es solo una confirmación/registro.';
+  } else {
+    actionText = en
+      ? 'Please confirm the location of this check and proceed with deposit if needed.'
+      : 'Por favor confirma la ubicación de este cheque y procede con el depósito si es necesario.';
+  }
+  
+  const subject = en
+    ? `💵 Check received — Invoice #${inv.invoiceNumber} — ${inv.customerName} — ${fmtCurrency(inv.amount)}`
+    : `💵 Cheque recibido — Factura #${inv.invoiceNumber} — ${inv.customerName} — ${fmtCurrency(inv.amount)}`;
+  
+  // Plain text body
+  const plainTextLines = [
+    en ? `Hi ${collectionsName || 'team'},` : `Hola ${collectionsName || 'equipo'},`,
+    '',
+    en
+      ? 'A check has been collected for an invoice. Tracking info:'
+      : 'Se cobró un cheque por una factura. Detalles para tracking:',
+    '',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    `${en ? 'Invoice' : 'Factura'} #: ${inv.invoiceNumber}`,
+    `${en ? 'Customer' : 'Cliente'}: ${inv.customerName}`,
+    `${en ? 'Amount' : 'Monto'}: ${fmtCurrency(inv.amount)}`,
+    `${en ? 'Service date' : 'Fecha de servicio'}: ${inv.serviceDate || '—'}`,
+    `${en ? 'Technician who collected' : 'Técnico que cobró'}: ${inv.technician || '—'}`,
+    `${en ? 'Check #' : '# Cheque'}: ${checkRef || '(' + (en ? 'not provided' : 'no provisto') + ')'}`,
+    `${en ? 'Check location' : 'Ubicación'}: ${locLabel}`,
+    inv.spaModel ? `${en ? 'Spa model' : 'Modelo de spa'}: ${inv.spaModel}` : null,
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    '',
+    `>>> ${en ? 'ACTION NEEDED' : 'ACCIÓN REQUERIDA'}: ${actionText}`,
+    '',
+    checkNote ? (en ? 'Internal note from technician:' : 'Nota interna del técnico:') : null,
+    checkNote ? `"${checkNote}"` : null,
+    checkNote ? '' : null,
+    en ? '(This email was generated automatically from the Invoice Tracker.)' : '(Email generado automáticamente desde el Invoice Tracker.)',
+    '— Aspen Spas Service Department'
+  ].filter(l => l !== null);
+  const plainText = plainTextLines.join('\n');
+  
+  // Pretty HTML version (green header for "received check")
+  const htmlBody = `<!DOCTYPE html><html><body style="font-family:-apple-system,Segoe UI,Helvetica,sans-serif;color:#0f172a;max-width:560px;margin:0 auto;">
+  <div style="background:#15803d;color:white;padding:20px;border-radius:8px 8px 0 0;">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;opacity:0.85;">${en ? 'CHECK TRACKING' : 'TRACKING DE CHEQUE'}</div>
+    <div style="font-size:18px;font-weight:700;margin-top:4px;">💵 ${en ? 'Check received' : 'Cheque recibido'} — ${escapeHtml(fmtCurrency(inv.amount))}</div>
+  </div>
+  <div style="padding:24px;background:white;border:1px solid #e5e7eb;border-top:0;border-radius:0 0 8px 8px;">
+    <p style="margin:0 0 14px 0;font-size:14px;">${en ? `Hi ${escapeHtml(collectionsName || 'team')},` : `Hola ${escapeHtml(collectionsName || 'equipo')},`}</p>
+    <p style="margin:0 0 14px 0;font-size:14px;line-height:1.5;">${en ? 'A check has been collected for an invoice. Here are the tracking details:' : 'Se cobró un cheque por una factura. Aquí los detalles para el tracking:'}</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin:12px 0;">
+      <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;width:40%;">${en ? 'Invoice' : 'Factura'} #</td><td style="padding:6px 8px;font-family:monospace;">${escapeHtml(inv.invoiceNumber)}</td></tr>
+      <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${en ? 'Customer' : 'Cliente'}</td><td style="padding:6px 8px;">${escapeHtml(inv.customerName)}</td></tr>
+      <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${en ? 'Amount' : 'Monto'}</td><td style="padding:6px 8px;background:#f0fdf4;color:#15803d;font-weight:700;">${fmtCurrency(inv.amount)}</td></tr>
+      <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${en ? 'Technician' : 'Técnico'}</td><td style="padding:6px 8px;">${escapeHtml(inv.technician || '—')}</td></tr>
+      <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${en ? 'Check #' : 'Cheque #'}</td><td style="padding:6px 8px;font-family:monospace;">${escapeHtml(checkRef || '(' + (en ? 'not provided' : 'no provisto') + ')')}</td></tr>
+      <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">📍 ${en ? 'Location' : 'Ubicación'}</td><td style="padding:6px 8px;background:#fef9c3;color:#854d0e;font-weight:600;">${escapeHtml(locLabel)}</td></tr>
+      ${inv.spaModel ? `<tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${en ? 'Spa model' : 'Modelo'}</td><td style="padding:6px 8px;">${escapeHtml(inv.spaModel)}</td></tr>` : ''}
+      <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${en ? 'Service date' : 'Fecha servicio'}</td><td style="padding:6px 8px;">${escapeHtml(inv.serviceDate || '—')}</td></tr>
+    </table>
+    <div style="background:#fef3c7;border-left:3px solid #f59e0b;padding:12px 14px;border-radius:4px;margin-top:14px;font-size:13px;color:#78350f;">
+      <strong>${en ? 'ACTION NEEDED:' : 'ACCIÓN REQUERIDA:'}</strong> ${escapeHtml(actionText)}
+    </div>
+    ${checkNote ? `<div style="margin-top:14px;padding:10px 12px;background:#f8fafc;border-left:3px solid #94a3b8;border-radius:4px;font-size:12.5px;color:#475569;"><strong>${en ? 'Note from technician:' : 'Nota del técnico:'}</strong><br><em>"${escapeHtml(checkNote)}"</em></div>` : ''}
+    ${inv.pdfBase64 ? `<div style="font-size:12px;color:#475569;margin-top:14px;background:#f1f5f9;padding:10px 12px;border-radius:4px;">📎 ${en ? 'Invoice PDF is attached to this email for reference.' : 'PDF de la factura adjunto para tu referencia.'}</div>` : ''}
+    <p style="font-size:11px;color:#94a3b8;margin-top:18px;font-style:italic;">${en ? '(This email was generated automatically from the Invoice Tracker.)' : '(Email generado automáticamente desde el Invoice Tracker.)'}</p>
+    <p style="font-size:13px;color:#475569;margin-top:6px;">— Aspen Spas Service Department</p>
+  </div>
+</body></html>`.trim();
+  
+  // Build .eml with PDF attached (same MIME structure as customer/collections emails)
+  const pdfBase64 = inv.pdfBase64 || '';
+  const pdfFilename = inv.pdfFilename || `Invoice_${inv.invoiceNumber}.pdf`;
+  const boundary = '====aspen_check_' + Math.random().toString(36).slice(2, 12) + '====';
+  const altBoundary = '====alt_check_' + Math.random().toString(36).slice(2, 12) + '====';
+  const wrappedB64 = pdfBase64 ? pdfBase64.match(/.{1,76}/g).join('\r\n') : '';
+  
+  const emlLines = [
+    `From: "${savedSettings.fromName || 'Aspen Spas Service'}" <service1@aspenspas.com>`,
+    `To: "${collectionsName || 'Deposit Team'}" <${collectionsEmail}>`,
+    `Subject: ${subject}`,
+    `Date: ${new Date().toUTCString()}`,
+    `X-Unsent: 1`,
+    `MIME-Version: 1.0`,
+    pdfBase64 
+      ? `Content-Type: multipart/mixed; boundary="${boundary}"`
+      : `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+    ``
+  ];
+  
+  if (pdfBase64) {
+    emlLines.push(
+      `--${boundary}`,
+      `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+      ``,
+      `--${altBoundary}`,
+      `Content-Type: text/plain; charset=utf-8`,
+      `Content-Transfer-Encoding: quoted-printable`,
+      ``,
+      encodeQuotedPrintable(plainText),
+      ``,
+      `--${altBoundary}`,
+      `Content-Type: text/html; charset=utf-8`,
+      `Content-Transfer-Encoding: quoted-printable`,
+      ``,
+      encodeQuotedPrintable(htmlBody),
+      ``,
+      `--${altBoundary}--`,
+      ``,
+      `--${boundary}`,
+      `Content-Type: application/pdf; name="${pdfFilename}"`,
+      `Content-Disposition: attachment; filename="${pdfFilename}"`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      wrappedB64,
+      ``,
+      `--${boundary}--`
+    );
+  } else {
+    emlLines.push(
+      `--${altBoundary}`,
+      `Content-Type: text/plain; charset=utf-8`,
+      `Content-Transfer-Encoding: quoted-printable`,
+      ``,
+      encodeQuotedPrintable(plainText),
+      ``,
+      `--${altBoundary}`,
+      `Content-Type: text/html; charset=utf-8`,
+      `Content-Transfer-Encoding: quoted-printable`,
+      ``,
+      encodeQuotedPrintable(htmlBody),
+      ``,
+      `--${altBoundary}--`
+    );
+  }
+  
+  const emlContent = emlLines.join('\r\n');
+  const blob = new Blob([emlContent], { type: 'message/rfc822' });
+  const filename = `Check_${inv.invoiceNumber}_${(inv.customerName || 'customer').replace(/[^a-zA-Z0-9]/g, '_')}.eml`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
+  
+  toast(en
+    ? `✉ Check tracking .eml downloaded ${pdfBase64 ? 'WITH PDF attached' : '(no PDF)'}. Open with Outlook → click Send.`
+    : `✉ .eml de tracking de cheque descargado ${pdfBase64 ? 'CON PDF adjunto' : '(sin PDF)'}. Abre con Outlook → dale Send.`,
+    'success');
+};
+
 // Wire up radios (one-time setup, called on DOM ready below)
 function wirePaymentReasonRadios() {
   document.querySelectorAll('#psReasonGroup .ps-radio').forEach(r => {
@@ -5119,6 +5357,9 @@ function wirePaymentReasonRadios() {
       document.querySelectorAll('#psMethodGroup .ps-radio').forEach(x => x.classList.remove('active'));
       r.classList.add('active');
       psSelectedMethod = r.dataset.method || '';
+      // Show/hide check tracking block based on selection
+      const checkBlock = document.getElementById('psCheckTracking');
+      if (checkBlock) checkBlock.style.display = (psSelectedMethod === 'check') ? 'block' : 'none';
     });
   });
 }
