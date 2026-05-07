@@ -1,4 +1,3 @@
-# aspen-invoice-tracker.html
 # 📋 Aspen Spas — Invoice Tracker
 
 > **Repo:** `aspenservices/invoice-tracker`
@@ -125,6 +124,14 @@ service cloud.firestore {
 
 ### Firebase Realtime Database Rules — Invoice Tracker
 
+> 🚨 **CRÍTICO PARA SINCRONIZACIÓN ENTRE EQUIPOS** — Si las reglas no permiten escritura, cada Mac guarda en su propio localStorage y Alberto/Nela no se ven los datos entre sí.
+
+**Pasos para configurar / Setup steps:**
+
+1. Ve a [Firebase Console → Realtime Database](https://console.firebase.google.com/project/invoice-daily-f170e/database/invoice-daily-f170e-default-rtdb/rules)
+2. Click la pestaña **"Reglas" / "Rules"**
+3. Reemplaza el contenido con esto y click **"Publicar" / "Publish"**:
+
 ```json
 {
   "rules": {
@@ -136,7 +143,23 @@ service cloud.firestore {
 }
 ```
 
-> ⚠ **Nota:** estas reglas son permisivas. Para producción seria considerar agregar autenticación con Firebase Auth (Google sign-in) y restringir escritura a usuarios @aspenspas.com.
+> ⚠ **Nota de seguridad:** estas reglas son permisivas (cualquiera con la URL puede leer/escribir). Si quieres más seguridad, considera Firebase Auth con Google sign-in restringido a `@aspenspas.com`.
+
+**Cómo verificar que funciona / How to verify:**
+
+- En la app, el header muestra el indicador de conexión (puntito):
+  - 🟢 **Verde + "Sincronizado · Firebase"** = todo OK, datos van a la nube
+  - 🟡 **Amarillo + "Modo local"** = NO sincroniza, configura las reglas
+  - 🔴 **Rojo + "Error"** = hay problema de red o config
+- Si está en amarillo, sale un banner naranja prominente en la parte superior del dashboard pidiendo configurar las reglas.
+
+**Test de sincronización entre Macs:**
+
+1. Mac A: crea una factura nueva
+2. Mac B: recarga la página (`Cmd+R`)
+3. La factura debería aparecer en Mac B en menos de 5 segundos
+
+Si NO aparece → las reglas no están configuradas. Repite los pasos arriba.
 
 ---
 
@@ -398,15 +421,68 @@ git push origin main
 
 ## 🐛 Troubleshooting
 
-| 🇪🇸 Síntoma | 🇺🇸 Symptom | Causa / Cause | Solución / Solution |
-|-----------|-----------|---------------|---------------------|
-| "No puedo guardar la factura" | "Can't save invoice" | Faltan campos requeridos (Número de factura, Monto, Cliente, Email) | Los 4 campos están al **inicio del modal**, scrollea hacia arriba. Ahora se ponen rojos y tiemblan si están vacíos. |
-| "Modo local (sin Firebase)" en banner | Same | Firebase config no detectado | Verifica que estás usando la versión más reciente del `index.html` (con apiKey hardcoded) |
-| Import desde TICKETS solo trae el nombre | Same | Reglas de Firestore bloquean lectura | Ver sección [Firestore Security Rules](#firestore-security-rules--tech-tickets) — pega las reglas en Firebase Console del proyecto `tech-tickets-a9485` |
-| Email se abre en Apple Mail en lugar de Outlook | Same | Asociación de archivos `.eml` mal configurada | Finder → click derecho al `.eml` → Get Info → Open with → Microsoft Outlook → Change All |
-| `Cannot read property 'spaDescription' of undefined` en consola | Same | Versión vieja con bug de naming collision | Descarga la última versión |
-| Notificaciones no llegan | Notifications not arriving | Permisos del navegador denegados | Chrome → ⚙️ Settings → Privacy → Site Settings → Notifications → permitir `aspenservices.github.io` |
-| Datos no sincronizan entre Mac de Alberto y Mac de Nela | Data not syncing between machines | Una de las Macs está en modo local | Ambas deben usar la versión deployed (no archivos en Downloads) |
+### 🚨 "No puedo guardar la factura" / "Can't save invoice"
+
+**Causa raíz:** Antes el `await` que escribe a Firebase no tenía try/catch — si Firebase rechazaba el write (por reglas, sin permisos, sin red), el error se tragaba silenciosamente y el botón "Guardar" parecía no hacer nada.
+
+**Fix aplicado:**
+- ✅ Try/catch alrededor del save
+- ✅ Mensaje de error visible **dentro del modal** (no se puede pasar por alto)
+- ✅ Auto-fallback a localStorage si Firebase falla — los datos NO se pierden
+- ✅ Detección específica de `PERMISSION_DENIED` con instrucciones para fixear
+
+**Si todavía no guarda, revisa:**
+1. ¿Llenaste los 4 campos con `*` rojo? (Número de factura, Monto, Cliente, Email — al inicio del modal)
+2. ¿El email tiene formato válido (con `@` y dominio)?
+3. ¿Aparece un mensaje rojo dentro del modal junto al botón Cancelar? Léelo — te dice qué falló.
+4. Abre la consola del navegador (F12 → Console) — los errores reales aparecen ahí.
+
+### 🚨 "Datos no sincronizan entre Mac de Alberto y Mac de Nela" / "Data not syncing between Macs"
+
+**Causa raíz:** Las reglas de Firebase Realtime Database por default **no permiten escritura** sin autenticación. Cuando una Mac no puede escribir, automáticamente guardaba en localStorage propio sin avisar.
+
+**Fix aplicado:**
+- ✅ Banner naranja prominente en el dashboard cuando estás en "Modo local"
+- ✅ El indicador de conexión (puntito en el header) ahora es muy visible: verde = nube, amarillo = local, rojo = error
+- ✅ Botón "Open Settings" / "Recargar" en el banner para acción rápida
+
+**Para que sincronice correctamente:**
+1. Configura las reglas de Firebase Realtime Database (ver [sección anterior](#firebase-realtime-database-rules--invoice-tracker))
+2. Recarga la app — el indicador debe ponerse 🟢 verde
+3. Haz un test: crea factura en Mac A → recarga Mac B → debe aparecer
+
+### 🚨 "Notificaciones no llegan" / "Notifications don't arrive"
+
+**Causa raíz:** Antes solo se disparaban via `new Notification()` directo, que requiere pestaña en foco y no tiene Service Worker.
+
+**Fix aplicado:**
+- ✅ Service Worker registrado automáticamente (inline, sin archivo separado)
+- ✅ Notificaciones llegan incluso con la pestaña backgrounded
+- ✅ Al activar las notificaciones, dispara una notif de TEST inmediato — sabes al instante si funcionan
+- ✅ Al cargar la app, verifica TODOS los pendientes (follow-ups + sin enviar +24h + CC sin pedir + facturas críticas +30d) en una sola notif resumen
+- ✅ Re-checa cada 15 min (antes era 30)
+- ✅ Click en la notif te lleva al dashboard
+
+**Para activar notificaciones:**
+1. Click el botón 🔕 en el header
+2. Permite cuando Chrome pida permiso
+3. Llega una notificación de prueba al instante — si la ves, funciona ✅
+4. Si no llega:
+   - Revisa Chrome → ⚙️ Settings → Privacy → Site Settings → Notifications
+   - Confirma que `aspenservices.github.io` esté en "Allow"
+   - macOS: System Settings → Notifications → Chrome → "Allow notifications"
+
+**Limitación honesta:** las notificaciones SOLO disparan cuando abras la app. No son notificaciones push reales (que requerirían Firebase Cloud Messaging y backend dedicado). Pero al abrir el dashboard cada mañana, te llega un resumen de todo lo pendiente del día.
+
+### Otros problemas
+
+| 🇪🇸 Síntoma | 🇺🇸 Symptom | Solución / Solution |
+|-----------|-----------|---------------------|
+| Banner amarillo "Modo local" | "Local mode" yellow banner | Configura las reglas de Firebase RTDB (ver arriba) y recarga |
+| Import desde TICKETS solo trae el nombre | Import only fetches name | Reglas de Firestore bloquean lectura — ver [Firestore Security Rules](#firestore-security-rules--tech-tickets) |
+| Email se abre en Apple Mail en lugar de Outlook | Email opens in Apple Mail | Finder → click derecho al `.eml` → Get Info → Open with → Microsoft Outlook → Change All |
+| Botón EN/ES no cambia el modal de Settings | Lang button doesn't translate Settings | Settings modal todavía no traducido — pendiente en roadmap |
+| El PDF no se autoextrae | PDF extraction fails | Algunos PDFs tienen formatos custom — escribe los datos a mano y reporta el PDF para mejorar el parser |
 
 ---
 
