@@ -997,7 +997,7 @@ input.field-err, textarea.field-err, select.field-err {
         <span id="connText">…</span>
       </div>
       <button class="icon-btn" id="langBtn" onclick="toggleLang()" data-i18n="header.lang" data-i18n-title="header.lang.title" style="font-weight:700;font-size:11px;letter-spacing:0.05em;width:auto;padding:0 10px;">EN</button>
-      <button class="icon-btn" id="notifBtn" onclick="toggleNotifications()" data-i18n-title="header.notif.off">🔕</button>
+      <button class="icon-btn" id="notifBtn" onclick="window.openNotifPanel()" data-i18n-title="header.notif.title">🔕</button>
       <button class="icon-btn" onclick="openSettingsModal()" data-i18n-title="header.settings">⚙</button>
     </div>
   </header>
@@ -1119,7 +1119,7 @@ input.field-err, textarea.field-err, select.field-err {
           <input type="text" id="fInvoiceNumber" placeholder="Ej. 271176" autocomplete="off">
         </div>
         <div class="field">
-          <label><span data-i18n="form.invoice.amount">Monto</span> <span class="req">*</span></label>
+          <label style="display:flex;justify-content:space-between;align-items:center;"><span><span data-i18n="form.invoice.amount">Monto</span> <span class="req">*</span></span><button type="button" onclick="window.openWarrantyFromInvoice()" style="background:none;border:none;color:#0284C7;font-size:11px;cursor:pointer;font-weight:600;padding:0;text-decoration:underline;" data-i18n="warranty.openBtn">🛡 Garantía</button></label>
           <input type="number" id="fAmount" step="0.01" placeholder="0.00">
         </div>
         <div class="field full">
@@ -1460,6 +1460,20 @@ Mahogany Durawood..."></textarea>
         <code style="display:block;margin-top:4px;font-size:10px;">match /databases/{database}/documents { match /{doc=**} { allow read: if true; } }</code>
         <br>(Esto permite lectura pública. Si necesitas privacidad, configura auth — avísame.)
       </div>
+
+      <!-- ─── COLLECTIONS TEAM EMAIL ─── -->
+      <div style="margin-top:18px;padding-top:18px;border-top:1px solid var(--border);">
+        <h4 style="font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-soft);margin:0 0 10px;">📞 <span data-i18n="settings.collections.title">Equipo de cobros (alertas internas)</span></h4>
+        <div style="font-size:12px;color:var(--text-soft);line-height:1.5;margin-bottom:8px;" data-i18n="settings.collections.hint">Cuando marques una factura con CC declinada o sin CC en archivo, el sistema te ofrece mandar un email interno a la persona encargada de cobros.</div>
+        <div class="field">
+          <label data-i18n="settings.collections.name">Nombre de la persona</label>
+          <input type="text" id="cfgCollectionsName" placeholder="Ej. Nela, Celia" autocomplete="off">
+        </div>
+        <div class="field">
+          <label data-i18n="settings.collections.email">Email de la persona</label>
+          <input type="email" id="cfgCollectionsEmail" placeholder="ej. nela@aspenspas.com" autocomplete="off">
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('settingsModal')">Cancelar</button>
@@ -1555,6 +1569,93 @@ Mahogany Durawood..."></textarea>
 <!-- ════════════════════════════════════════
      PAYMENT STATUS MODAL
      ════════════════════════════════════════ -->
+<!-- ═════════ NOTIFICATION HEALTH PANEL ═════════ -->
+<div class="modal-backdrop" id="notifModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <span class="modal-title">🔔 <span data-i18n="notif.panel.title">Notificaciones de seguimiento</span></span>
+      <button class="modal-close" onclick="closeModal('notifModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="notifPanelBody" style="display:grid;gap:14px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('notifModal')" data-i18n="form.close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ WARRANTY CALCULATOR MODAL ═════════ -->
+<div class="modal-backdrop" id="warrantyModal">
+  <div class="modal" style="max-width:580px;">
+    <div class="modal-header">
+      <span class="modal-title">🛡 <span data-i18n="warranty.title">Calculadora de garantía</span></span>
+      <button class="modal-close" onclick="closeModal('warrantyModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;gap:12px;">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:4px;" data-i18n="warranty.model.label">Modelo del spa *</label>
+          <input type="text" id="wcSpaModel" placeholder="Ej. 2022 Quattro ES, 2021 El Dorado GS" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;">
+          <div style="font-size:11px;color:var(--text-mute);margin-top:3px;" data-i18n="warranty.model.hint">El sistema detecta automáticamente la serie (VS/GS/ES) en el nombre.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:4px;" data-i18n="warranty.delivery.label">Fecha de delivery *</label>
+            <input type="date" id="wcDeliveryDate" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;">
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:4px;" data-i18n="warranty.service.label">Fecha de servicio</label>
+            <input type="date" id="wcServiceDate" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;">
+          </div>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:4px;" data-i18n="warranty.item.label">Item específico (opcional)</label>
+          <select id="wcSpecialItem" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;background:white;">
+            <option value="" data-i18n="warranty.item.generic">— Reparación general (rige por serie) —</option>
+            <option value="stereo" data-i18n="warranty.item.stereo">Stereo / Speakers (1 año)</option>
+            <option value="lifts" data-i18n="warranty.item.lifts">Lifts (1 año)</option>
+            <option value="covers" data-i18n="warranty.item.covers">Covers (1 año)</option>
+            <option value="ozone" data-i18n="warranty.item.ozone">Ozone (1 año)</option>
+            <option value="salt system" data-i18n="warranty.item.salt">Salt System (1 año)</option>
+            <option value="led lights" data-i18n="warranty.item.lights">LED / Pin lights (1 año)</option>
+            <option value="waterfall" data-i18n="warranty.item.waterfall">Waterfall (1 año)</option>
+            <option value="pump seals" data-i18n="warranty.item.pumps">Pump seals (1 año)</option>
+            <option value="stainless band" data-i18n="warranty.item.band">Stainless band (1 año)</option>
+            <option value="pillow" data-i18n="warranty.item.pillow">Pillows (3 meses)</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:4px;" data-i18n="warranty.cost.label">Costo estimado (opcional, para sugerir cargo al cliente)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <input type="number" id="wcLaborCost" placeholder="Labor $" step="0.01" style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;">
+            <input type="number" id="wcPartsCost" placeholder="Parts $" step="0.01" style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="window.runWarrantyCalc()" style="width:100%;padding:12px;font-weight:700;" data-i18n="warranty.calculate">⚡ Calcular</button>
+        <div id="wcResult" style="display:none;"></div>
+
+        <details style="margin-top:8px;">
+          <summary style="font-size:11px;font-weight:700;color:var(--text-soft);cursor:pointer;text-transform:uppercase;letter-spacing:0.06em;" data-i18n="warranty.rules.title">📋 Ver reglas oficiales (Aspen Spas)</summary>
+          <div style="font-size:11.5px;color:var(--text-soft);line-height:1.6;background:#F8FAFC;padding:12px;border-radius:var(--r-sm);margin-top:8px;border:1px solid var(--border);">
+            <div style="font-weight:700;color:var(--text);margin-bottom:6px;">Aspen Spas Warranty Breakdown</div>
+            <div><strong>VS Series:</strong> Labor Año 1 sin cargo · Parts Año 1-3 sin cargo</div>
+            <div><strong>GS Series:</strong> Labor Año 1 sin cargo, Año 2-5 trip charge únicamente · Parts Año 1-3 sin cargo, Año 4-5 al 50% MSRP</div>
+            <div><strong>ES Series:</strong> Parts &amp; Labor Año 1-5 cobertura 100%</div>
+            <div style="margin-top:6px;"><strong>1 Año:</strong> stereo, speakers, lifts, covers, ozone, salt system, lights, waterfall, pump seals</div>
+            <div><strong>3 Meses:</strong> pillows</div>
+            <div style="margin-top:6px;color:var(--pending);"><strong>⚠ Hard cutoff:</strong> spas delivered en 2019 o anteriores = 100% fuera de garantía</div>
+          </div>
+        </details>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('warrantyModal')" data-i18n="form.cancel">Cancelar</button>
+      <button class="btn btn-secondary" onclick="window.applyWarrantyToInvoice()" id="wcApplyBtn" style="display:none;" data-i18n="warranty.apply">📋 Aplicar nota a la factura</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="paymentModal">
   <div class="modal">
     <div class="modal-header">
@@ -1664,6 +1765,7 @@ const I18N = {
     'header.connection.local': 'Modo local (sin Firebase)',
     'header.notif.on': 'Notificaciones activas (click para desactivar)',
     'header.notif.off': 'Activar notificaciones',
+    'header.notif.title': 'Estado de notificaciones',
     'header.lang': 'EN',
     'header.lang.title': 'Switch to English',
     'header.settings': 'Configuración',
@@ -1843,6 +1945,7 @@ const I18N = {
     'header.connection.local': 'Local mode (no Firebase)',
     'header.notif.on': 'Notifications enabled (click to disable)',
     'header.notif.off': 'Enable notifications',
+    'header.notif.title': 'Notification status',
     'header.lang': 'ES',
     'header.lang.title': 'Cambiar a Español',
     'header.settings': 'Settings',
@@ -3046,6 +3149,9 @@ window.openSettingsModal = function() {
   document.getElementById('setTixTicketsColl').value = tdb.ticketsCollection || 'tickets';
   document.getElementById('setTixCustColl').value = tdb.customersCollection || '';
   document.getElementById('tixTestResult').innerHTML = '';
+  // Collections team email
+  document.getElementById('cfgCollectionsName').value = savedSettings.collectionsName || '';
+  document.getElementById('cfgCollectionsEmail').value = savedSettings.collectionsEmail || '';
   document.getElementById('settingsModal').classList.add('open');
 };
 
@@ -3100,6 +3206,8 @@ window.saveSettings = function() {
     phone: document.getElementById('setPhone').value.trim(),
     website: document.getElementById('setWebsite').value.trim() || 'aspenspas.com',
     fromName: document.getElementById('setFromName').value.trim() || 'Aspen Spas Service',
+    collectionsName: document.getElementById('cfgCollectionsName').value.trim(),
+    collectionsEmail: document.getElementById('cfgCollectionsEmail').value.trim(),
     firebaseConfig: null,
     ticketsDb: null
   };
@@ -4075,6 +4183,124 @@ window.deleteCurrentCustomer = async function() {
 // holds the address (street #, street name, city/state, zip) and the left
 // side holds spa info (model, dates, pack, components). Lines are separated
 // by 2+ spaces. We split into left/right streams, then parse each.
+// ════════════════════════════════════════════════════════════
+// WARRANTY CALCULATOR — Aspen Spas policy engine
+// Based on official Warranty Breakdown chart:
+//   VS series: Labor Y1 free, Parts Y1-3 free
+//   GS series: Labor Y1 free, Y2-5 trip charge; Parts Y1-3 free, Y4-5 50% MSRP
+//   ES series: Parts & Labor Y1-5 full coverage (100%)
+//   1-year items: stereo, speakers, lifts, covers, ozone, salt system, lights, waterfall, pump seals
+//   3-month items: pillows
+//   Hard cutoff: spas delivered 2019 or earlier = out of warranty
+// ════════════════════════════════════════════════════════════
+const WARRANTY_YEAR_ONE_ITEMS = ['stereo', 'speakers', 'lifts', 'covers', 'ozone', 'salt system', 'salt', 'stainless band', 'led', 'pin lights', 'waterfall', 'pump seals'];
+
+function detectSpaSeries(spaModel) {
+  if (!spaModel) return null;
+  const m = spaModel.toUpperCase();
+  if (/\bES\b/.test(m)) return 'ES';
+  if (/\bGS\b/.test(m)) return 'GS';
+  if (/\bVS\b/.test(m)) return 'VS';
+  return null;
+}
+
+function calculateWarranty({ spaModel, deliveryDate, serviceDate, specialItem }) {
+  const out = { series: null, ageYears: null, year: null, verdict: 'UNKNOWN', reason: '', laborCharge: false, partsCharge: false, partsPct: 0, laborPct: 0, notes: [] };
+  
+  if (!spaModel) { out.reason = 'Falta modelo del spa'; return out; }
+  if (!deliveryDate) { out.reason = 'Falta fecha de delivery'; return out; }
+  
+  out.series = detectSpaSeries(spaModel);
+  if (!out.series) { out.reason = 'No se detectó la serie (VS/GS/ES) en el modelo'; return out; }
+  
+  const delivery = new Date(deliveryDate);
+  if (isNaN(delivery)) { out.reason = 'Fecha de delivery inválida'; return out; }
+  
+  const service = serviceDate ? new Date(serviceDate) : new Date();
+  if (isNaN(service)) { out.reason = 'Fecha de servicio inválida'; return out; }
+  
+  out.ageYears = (service - delivery) / (365.25 * 24 * 60 * 60 * 1000);
+  out.year = Math.max(1, Math.ceil(out.ageYears)); // Year 1 = 0-1 years, Year 2 = 1-2, etc.
+  
+  // Hard cutoff: 2019 or earlier delivery = OUT
+  if (delivery.getFullYear() <= 2019) {
+    out.verdict = 'OUT_OF_WARRANTY';
+    out.reason = `Delivery ${delivery.getFullYear()} — Aspen policy: spas de 2019 o anteriores están 100% fuera de garantía`;
+    out.laborCharge = true; out.partsCharge = true; out.partsPct = 100; out.laborPct = 100;
+    return out;
+  }
+  
+  // Pillows special — 3 months only
+  if (specialItem && /pillow|almohad/i.test(specialItem)) {
+    const months = out.ageYears * 12;
+    if (months > 3) {
+      out.verdict = 'OUT_OF_WARRANTY';
+      out.reason = `Pillows: solo 3 meses de garantía (lleva ${months.toFixed(1)} meses)`;
+      out.laborCharge = true; out.partsCharge = true; out.partsPct = 100; out.laborPct = 100;
+    } else {
+      out.verdict = 'COVERED';
+      out.reason = 'Pillows: dentro de los 3 meses, cubierto';
+    }
+    return out;
+  }
+  
+  // 1-year items override (regardless of series)
+  if (specialItem) {
+    const itemLower = specialItem.toLowerCase();
+    const isYearOneItem = WARRANTY_YEAR_ONE_ITEMS.some(i => itemLower.includes(i));
+    if (isYearOneItem) {
+      if (out.ageYears > 1) {
+        out.verdict = 'OUT_OF_WARRANTY';
+        out.reason = `Item de 1 año (${specialItem}): garantía expiró (${out.ageYears.toFixed(1)} años)`;
+        out.laborCharge = true; out.partsCharge = true; out.partsPct = 100; out.laborPct = 100;
+      } else {
+        out.verdict = 'COVERED';
+        out.reason = `Item de 1 año (${specialItem}): dentro de garantía`;
+      }
+      return out;
+    }
+  }
+  
+  // Series-specific logic
+  if (out.series === 'VS') {
+    if (out.ageYears <= 1) {
+      out.verdict = 'COVERED'; out.reason = 'VS Año 1: Labor + Parts cubiertos';
+    } else if (out.ageYears <= 3) {
+      out.verdict = 'PARTIAL'; out.reason = 'VS Año 2-3: Parts cubiertos, Labor con cargo';
+      out.laborCharge = true; out.laborPct = 100;
+      out.notes.push('Cobra labor completo');
+    } else {
+      out.verdict = 'OUT_OF_WARRANTY'; out.reason = `VS más de 3 años (${out.ageYears.toFixed(1)})`;
+      out.laborCharge = true; out.partsCharge = true; out.partsPct = 100; out.laborPct = 100;
+    }
+  } else if (out.series === 'GS') {
+    if (out.ageYears <= 1) {
+      out.verdict = 'COVERED'; out.reason = 'GS Año 1: Labor + Parts cubiertos';
+    } else if (out.ageYears <= 3) {
+      out.verdict = 'PARTIAL'; out.reason = 'GS Año 2-3: Parts cubiertos, Labor = TRIP CHARGE únicamente';
+      out.laborCharge = 'TRIP_CHARGE'; out.laborPct = 0;
+      out.notes.push('Solo cobra trip charge (no labor completo)');
+    } else if (out.ageYears <= 5) {
+      out.verdict = 'PARTIAL'; out.reason = 'GS Año 4-5: Parts 50% MSRP, Labor = TRIP CHARGE únicamente';
+      out.laborCharge = 'TRIP_CHARGE'; out.partsCharge = true; out.partsPct = 50;
+      out.notes.push('Cobra 50% del MSRP en parts + trip charge');
+    } else {
+      out.verdict = 'OUT_OF_WARRANTY'; out.reason = `GS más de 5 años (${out.ageYears.toFixed(1)})`;
+      out.laborCharge = true; out.partsCharge = true; out.partsPct = 100; out.laborPct = 100;
+    }
+  } else if (out.series === 'ES') {
+    if (out.ageYears <= 5) {
+      out.verdict = 'COVERED'; out.reason = 'ES Año 1-5: cobertura total 100%';
+    } else {
+      out.verdict = 'OUT_OF_WARRANTY'; out.reason = `ES más de 5 años (${out.ageYears.toFixed(1)})`;
+      out.laborCharge = true; out.partsCharge = true; out.partsPct = 100; out.laborPct = 100;
+    }
+  }
+  
+  return out;
+}
+
+
 function parseQbNotesText(raw) {
   if (!raw) return null;
   const txt = raw.replace(/\r/g, '');
@@ -4450,6 +4676,137 @@ let psEditingId = null;
 let psSelectedReason = '';
 let psSelectedMethod = '';
 
+// ════════════════════════════════════════════════════════════
+// WARRANTY CALCULATOR — UI bindings
+// ════════════════════════════════════════════════════════════
+let _warrantyLastResult = null;
+
+window.openWarrantyFromInvoice = function() {
+  // Pre-fill from invoice form, then open modal
+  const spaModel = document.getElementById('fSpaModel').value.trim();
+  const serviceDate = document.getElementById('fServiceDate').value;
+  document.getElementById('wcSpaModel').value = spaModel;
+  document.getElementById('wcServiceDate').value = serviceDate || new Date().toISOString().slice(0,10);
+  // Try to detect delivery date from QB notes if cliente está autocompletado
+  const customerName = document.getElementById('fCustomerName').value.trim();
+  const c = findCustomerByName(customerName);
+  if (c && c.qbNotesRaw) {
+    const parsed = parseQbNotesText(c.qbNotesRaw);
+    if (parsed && parsed.delivered) {
+      // Convert MM/DD/YYYY to YYYY-MM-DD
+      const m = parsed.delivered.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+      if (m) {
+        let yr = m[3].length === 2 ? '20' + m[3] : m[3];
+        document.getElementById('wcDeliveryDate').value = `${yr}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+      }
+    }
+  }
+  document.getElementById('wcResult').style.display = 'none';
+  document.getElementById('wcApplyBtn').style.display = 'none';
+  document.getElementById('warrantyModal').classList.add('open');
+};
+
+window.runWarrantyCalc = function() {
+  const spaModel = document.getElementById('wcSpaModel').value.trim();
+  const deliveryDate = document.getElementById('wcDeliveryDate').value;
+  const serviceDate = document.getElementById('wcServiceDate').value;
+  const specialItem = document.getElementById('wcSpecialItem').value;
+  const laborCost = parseFloat(document.getElementById('wcLaborCost').value) || 0;
+  const partsCost = parseFloat(document.getElementById('wcPartsCost').value) || 0;
+  
+  const result = calculateWarranty({ spaModel, deliveryDate, serviceDate, specialItem });
+  _warrantyLastResult = result;
+  
+  // Build the result UI
+  let bgColor, borderColor, titleColor, icon, verdictText;
+  switch (result.verdict) {
+    case 'COVERED':
+      bgColor = '#ECFDF5'; borderColor = '#6EE7B7'; titleColor = '#047857';
+      icon = '✅'; verdictText = currentLang === 'en' ? 'COVERED — No charge to customer' : 'CUBIERTO — No cobrar al cliente';
+      break;
+    case 'PARTIAL':
+      bgColor = '#FEF3C7'; borderColor = '#FCD34D'; titleColor = '#92400E';
+      icon = '⚠'; verdictText = currentLang === 'en' ? 'PARTIAL coverage — Partial charge' : 'COBERTURA PARCIAL — Cobro parcial';
+      break;
+    case 'OUT_OF_WARRANTY':
+      bgColor = '#FEF2F2'; borderColor = '#FCA5A5'; titleColor = '#991B1B';
+      icon = '❌'; verdictText = currentLang === 'en' ? 'OUT OF WARRANTY — Charge in full' : 'FUERA DE GARANTÍA — Cobro completo';
+      break;
+    default:
+      bgColor = '#F1F5F9'; borderColor = '#CBD5E1'; titleColor = '#475569';
+      icon = 'ℹ'; verdictText = currentLang === 'en' ? 'INCOMPLETE — Need more info' : 'INCOMPLETO — Faltan datos';
+  }
+  
+  // Calculate suggested charge amounts
+  let suggestedTotal = 0;
+  let chargeBreakdown = [];
+  if (result.laborCharge === true && laborCost > 0) {
+    suggestedTotal += laborCost * (result.laborPct / 100);
+    chargeBreakdown.push(`Labor: $${laborCost.toFixed(2)} × ${result.laborPct}% = <strong>$${(laborCost * result.laborPct / 100).toFixed(2)}</strong>`);
+  } else if (result.laborCharge === 'TRIP_CHARGE') {
+    chargeBreakdown.push(currentLang === 'en' ? 'Labor: <strong>Trip charge only</strong> (no full labor)' : 'Labor: <strong>Solo trip charge</strong> (no labor completo)');
+  } else if (result.laborCharge === false) {
+    chargeBreakdown.push(currentLang === 'en' ? 'Labor: <strong style="color:#047857;">FREE</strong>' : 'Labor: <strong style="color:#047857;">GRATIS</strong>');
+  }
+  
+  if (result.partsCharge && result.partsPct > 0 && partsCost > 0) {
+    suggestedTotal += partsCost * (result.partsPct / 100);
+    chargeBreakdown.push(`Parts: $${partsCost.toFixed(2)} × ${result.partsPct}% = <strong>$${(partsCost * result.partsPct / 100).toFixed(2)}</strong>`);
+  } else if (result.partsCharge === false) {
+    chargeBreakdown.push(currentLang === 'en' ? 'Parts: <strong style="color:#047857;">FREE</strong>' : 'Parts: <strong style="color:#047857;">GRATIS</strong>');
+  }
+  
+  const ageStr = result.ageYears !== null ? `${result.ageYears.toFixed(1)} ${currentLang === 'en' ? 'years' : 'años'}` : '—';
+  const seriesBadge = result.series ? `<span style="background:${titleColor};color:white;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.04em;">${result.series}</span>` : '';
+  
+  const resEl = document.getElementById('wcResult');
+  resEl.innerHTML = `
+    <div style="background:${bgColor};border:1px solid ${borderColor};border-radius:var(--r-md);padding:14px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <div style="font-size:24px;">${icon}</div>
+        <div style="flex:1;">
+          <div style="font-weight:700;color:${titleColor};font-size:14px;">${verdictText}</div>
+          <div style="font-size:11px;color:${titleColor};opacity:0.8;">${seriesBadge} ${currentLang === 'en' ? 'Age' : 'Edad'}: ${ageStr}</div>
+        </div>
+      </div>
+      <div style="font-size:12.5px;color:${titleColor};line-height:1.5;margin-bottom:6px;"><strong>${currentLang === 'en' ? 'Reason' : 'Motivo'}:</strong> ${escapeHtml(result.reason)}</div>
+      ${chargeBreakdown.length > 0 ? `
+        <div style="border-top:1px solid ${borderColor};padding-top:8px;margin-top:8px;font-size:12px;">
+          ${chargeBreakdown.map(l => `<div style="margin-bottom:2px;">${l}</div>`).join('')}
+          ${suggestedTotal > 0 ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed ${borderColor};font-size:14px;"><strong>${currentLang === 'en' ? 'Suggested total to charge' : 'Total sugerido a cobrar'}: $${suggestedTotal.toFixed(2)}</strong></div>` : ''}
+        </div>` : ''}
+      ${result.notes.length > 0 ? `<div style="margin-top:6px;font-size:11px;color:${titleColor};font-style:italic;">${result.notes.map(n => `💡 ${escapeHtml(n)}`).join(' · ')}</div>` : ''}
+    </div>
+  `;
+  resEl.style.display = 'block';
+  
+  // Show "Apply to invoice" button only if we have meaningful data
+  document.getElementById('wcApplyBtn').style.display = (result.verdict !== 'UNKNOWN') ? 'inline-flex' : 'none';
+  // Stash suggested total for apply
+  window._warrantySuggestedTotal = suggestedTotal;
+};
+
+window.applyWarrantyToInvoice = function() {
+  const r = _warrantyLastResult;
+  if (!r) return;
+  // Append a verdict note to the invoice notes
+  const notesEl = document.getElementById('fNotes');
+  const tag = `[Garantía ${r.series || '?'} · ${r.verdict}] ${r.reason}`;
+  const existing = (notesEl.value || '').trim();
+  if (!existing.includes(tag)) {
+    notesEl.value = existing ? `${existing}\n${tag}` : tag;
+  }
+  // If suggested total > 0 and amount is empty, prefill
+  const total = window._warrantySuggestedTotal || 0;
+  const amountEl = document.getElementById('fAmount');
+  if (total > 0 && (!amountEl.value || parseFloat(amountEl.value) === 0)) {
+    amountEl.value = total.toFixed(2);
+  }
+  closeModal('warrantyModal');
+  toast(currentLang === 'en' ? '✓ Warranty note added to invoice' : '✓ Nota de garantía agregada a la factura', 'success');
+};
+
+
 window.openPaymentModal = function(id) {
   const inv = allInvoices.find(i => i.id === id);
   if (!inv) return;
@@ -4485,18 +4842,184 @@ window.savePaymentStatus = async function() {
     paymentNote: document.getElementById('psNote').value.trim() || null
   };
   // If a payment method was selected, auto-mark invoice as paid
+  let willMarkPaid = false;
   if (psSelectedMethod) {
     const inv = allInvoices.find(i => i.id === psEditingId);
     if (inv && inv.status !== 'paid') {
       updates.status = 'paid';
       updates.paidAt = Date.now();
-      updates.paymentReason = null; // clear reason since it's paid now
+      updates.paymentReason = null;
+      willMarkPaid = true;
     }
   }
   await updateInvoiceData(psEditingId, updates);
   toast(psSelectedMethod ? (currentLang === 'en' ? '✓ Marked as paid' : '✓ Marcada como pagada') : (currentLang === 'en' ? 'Payment status updated' : 'Estado de cobro actualizado'), 'success');
   closeModal('paymentModal');
+  
+  // ─── If payment problem (declined/no-CC), offer to notify collections team ───
+  const isProblematic = !willMarkPaid && (psSelectedReason === 'cc_declined' || psSelectedReason === 'cc_needed');
+  if (isProblematic) {
+    setTimeout(() => offerCollectionsNotification(psEditingId, psSelectedReason), 400);
+  }
 };
+
+// Show a confirm modal to offer generating an internal email to the collections team
+function offerCollectionsNotification(invoiceId, reason) {
+  const inv = allInvoices.find(i => i.id === invoiceId);
+  if (!inv) return;
+  const collectionsEmail = (savedSettings.collectionsEmail || '').trim();
+  const collectionsName = (savedSettings.collectionsName || '').trim();
+  const en = currentLang === 'en';
+  
+  if (!collectionsEmail) {
+    // Settings not configured — give Alberto the option to go set it up
+    if (confirm(en
+      ? `Mark this invoice for collections follow-up.\n\nNo collections team email is configured yet. Open Settings to set one?`
+      : `Marcar esta factura para seguimiento de cobros.\n\nNo hay email de la persona de cobros configurado todavía. ¿Abrir Settings para configurarlo?`)) {
+      window.openSettingsModal();
+    }
+    return;
+  }
+  
+  const reasonLabel = reason === 'cc_declined'
+    ? (en ? 'Credit card DECLINED' : 'Tarjeta DECLINADA')
+    : (en ? 'No credit card on file' : 'Sin CC en archivo');
+  
+  if (!confirm(en
+    ? `Send internal alert email to ${collectionsName || collectionsEmail}?\n\nInvoice: #${inv.invoiceNumber}\nCustomer: ${inv.customerName}\nIssue: ${reasonLabel}\nAmount: ${fmtCurrency(inv.amount)}`
+    : `¿Mandar alerta interna a ${collectionsName || collectionsEmail}?\n\nFactura: #${inv.invoiceNumber}\nCliente: ${inv.customerName}\nProblema: ${reasonLabel}\nMonto: ${fmtCurrency(inv.amount)}`)) {
+    return;
+  }
+  
+  generateCollectionsEml(inv, reason);
+}
+
+// Generate an .eml internal alert addressed to the collections team
+function generateCollectionsEml(inv, reason) {
+  const collectionsEmail = (savedSettings.collectionsEmail || '').trim();
+  const collectionsName = (savedSettings.collectionsName || '').trim();
+  const en = currentLang === 'en';
+  
+  const reasonLabel = reason === 'cc_declined'
+    ? (en ? '❌ CC DECLINED' : '❌ CC DECLINADA')
+    : (en ? '📞 No CC on file' : '📞 Sin CC en archivo');
+  
+  const subject = en
+    ? `[ACTION NEEDED] Invoice #${inv.invoiceNumber} — ${reasonLabel.replace(/[❌📞]/g, '').trim()} — ${inv.customerName}`
+    : `[ACCIÓN REQUERIDA] Factura #${inv.invoiceNumber} — ${reasonLabel.replace(/[❌📞]/g, '').trim()} — ${inv.customerName}`;
+  
+  const customer = allCustomers.find(c => 
+    (c.name || '').toLowerCase().trim() === (inv.customerName || '').toLowerCase().trim()
+  );
+  
+  const fields = en ? {
+    issue: 'Issue', invNum: 'Invoice #', cust: 'Customer', amt: 'Amount', email: 'Email',
+    phone: 'Phone', model: 'Spa model', sent: 'Last sent', greet: `Hi ${collectionsName || 'team'},`,
+    body: `An invoice needs your follow-up because of a payment issue.`,
+    action: `ACTION NEEDED: please call the customer to update payment method and complete the charge.`,
+    note: `(This email was generated automatically from the Invoice Tracker dashboard.)`,
+    sig: `— Aspen Spas Service Department`
+  } : {
+    issue: 'Problema', invNum: 'Factura #', cust: 'Cliente', amt: 'Monto', email: 'Email',
+    phone: 'Teléfono', model: 'Modelo del spa', sent: 'Último envío', greet: `Hola ${collectionsName || 'equipo'},`,
+    body: `Una factura necesita tu seguimiento por un problema de cobro.`,
+    action: `ACCIÓN REQUERIDA: por favor llama al cliente para actualizar el método de pago y completar el cobro.`,
+    note: `(Este email se generó automáticamente desde el Invoice Tracker dashboard.)`,
+    sig: `— Aspen Spas Service Department`
+  };
+  
+  const sentDate = inv.sentAt ? new Date(inv.sentAt).toLocaleDateString() : '—';
+  
+  const bodyHtml = `
+<!DOCTYPE html><html><body style="font-family:-apple-system,Segoe UI,Helvetica,sans-serif;color:#0f172a;max-width:560px;margin:0 auto;">
+  <div style="background:#7f1d1d;color:white;padding:20px;border-radius:8px 8px 0 0;">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;opacity:0.8;">${en ? 'INTERNAL ALERT' : 'ALERTA INTERNA'}</div>
+    <div style="font-size:18px;font-weight:700;margin-top:4px;">${reasonLabel}</div>
+  </div>
+  <div style="padding:24px;background:white;border:1px solid #e5e7eb;border-top:0;border-radius:0 0 8px 8px;">
+    <p style="margin:0 0 14px 0;font-size:14px;">${escapeHtml(fields.greet)}</p>
+    <p style="margin:0 0 14px 0;font-size:14px;line-height:1.5;">${escapeHtml(fields.body)}</p>
+    
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin:12px 0;">
+      <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;width:40%;">${escapeHtml(fields.issue)}</td><td style="padding:6px 8px;background:#fef2f2;color:#991b1b;font-weight:700;">${reasonLabel}</td></tr>
+      <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${escapeHtml(fields.invNum)}</td><td style="padding:6px 8px;font-family:monospace;">${escapeHtml(inv.invoiceNumber)}</td></tr>
+      <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${escapeHtml(fields.cust)}</td><td style="padding:6px 8px;">${escapeHtml(inv.customerName)}</td></tr>
+      <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${escapeHtml(fields.amt)}</td><td style="padding:6px 8px;font-weight:700;">${fmtCurrency(inv.amount)}</td></tr>
+      <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${escapeHtml(fields.email)}</td><td style="padding:6px 8px;"><a href="mailto:${escapeHtml(inv.customerEmail)}" style="color:#0284C7;">${escapeHtml(inv.customerEmail || '—')}</a></td></tr>
+      ${customer && customer.phone ? `<tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${escapeHtml(fields.phone)}</td><td style="padding:6px 8px;font-family:monospace;"><a href="tel:${escapeHtml(customer.phone)}" style="color:#0284C7;">${escapeHtml(customer.phone)}</a></td></tr>` : ''}
+      ${inv.spaModel ? `<tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${escapeHtml(fields.model)}</td><td style="padding:6px 8px;">${escapeHtml(inv.spaModel)}</td></tr>` : ''}
+      <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${escapeHtml(fields.sent)}</td><td style="padding:6px 8px;">${escapeHtml(sentDate)}</td></tr>
+    </table>
+    
+    <div style="background:#fef3c7;border-left:3px solid #f59e0b;padding:12px 14px;border-radius:4px;margin-top:14px;font-size:13px;color:#78350f;">
+      <strong>${escapeHtml(fields.action)}</strong>
+    </div>
+    
+    <p style="font-size:11px;color:#94a3b8;margin-top:18px;font-style:italic;">${escapeHtml(fields.note)}</p>
+    <p style="font-size:13px;color:#475569;margin-top:6px;">${escapeHtml(fields.sig)}</p>
+  </div>
+</body></html>`.trim();
+  
+  // Plain-text fallback
+  const bodyTxt = [
+    fields.greet,
+    '',
+    fields.body,
+    '',
+    `${fields.issue}: ${reasonLabel}`,
+    `${fields.invNum}: ${inv.invoiceNumber}`,
+    `${fields.cust}: ${inv.customerName}`,
+    `${fields.amt}: ${fmtCurrency(inv.amount)}`,
+    `${fields.email}: ${inv.customerEmail || '—'}`,
+    customer && customer.phone ? `${fields.phone}: ${customer.phone}` : null,
+    inv.spaModel ? `${fields.model}: ${inv.spaModel}` : null,
+    `${fields.sent}: ${sentDate}`,
+    '',
+    `>>> ${fields.action}`,
+    '',
+    fields.note,
+    fields.sig
+  ].filter(Boolean).join('\n');
+  
+  // Build .eml file
+  const boundary = '----=_Part_AspenInternal_' + Date.now();
+  const emlLines = [
+    `From: "${savedSettings.fromName || 'Aspen Spas Invoice Tracker'}" <noreply@aspenspas.com>`,
+    `To: "${collectionsName || 'Collections'}" <${collectionsEmail}>`,
+    `Subject: ${subject}`,
+    `Date: ${new Date().toUTCString()}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    ``,
+    `--${boundary}`,
+    `Content-Type: text/plain; charset=UTF-8`,
+    `Content-Transfer-Encoding: 8bit`,
+    ``,
+    bodyTxt,
+    ``,
+    `--${boundary}`,
+    `Content-Type: text/html; charset=UTF-8`,
+    `Content-Transfer-Encoding: 8bit`,
+    ``,
+    bodyHtml,
+    ``,
+    `--${boundary}--`
+  ];
+  const emlBody = emlLines.join('\r\n');
+  const blob = new Blob([emlBody], { type: 'message/rfc822' });
+  const filename = `collections-alert-${inv.invoiceNumber}-${Date.now()}.eml`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
+  
+  toast(en
+    ? `✉ Internal alert .eml downloaded — open with Outlook to send to ${collectionsName || collectionsEmail}`
+    : `✉ Alerta interna .eml descargada — abre con Outlook para mandar a ${collectionsName || collectionsEmail}`,
+    'success');
+}
 
 // Wire up radios (one-time setup, called on DOM ready below)
 function wirePaymentReasonRadios() {
@@ -5014,6 +5537,197 @@ async function requestNotifPermission() {
   const result = await Notification.requestPermission();
   return result === 'granted';
 }
+
+// ════════════════════════════════════════════════════════════
+// NOTIFICATION HEALTH PANEL — visible status + diagnostics
+// Click on 🔔 in header opens this; replaces old toggle-only behavior
+// ════════════════════════════════════════════════════════════
+window.openNotifPanel = function() {
+  renderNotifPanel();
+  document.getElementById('notifModal').classList.add('open');
+};
+
+function renderNotifPanel() {
+  const body = document.getElementById('notifPanelBody');
+  if (!body) return;
+  
+  const en = currentLang === 'en';
+  const enabled = localStorage.getItem('aspenNotifEnabled') === '1';
+  const supported = ('Notification' in window);
+  const permission = supported ? Notification.permission : 'denied';
+  const swSupported = 'serviceWorker' in navigator;
+  const swActive = !!_swRegistration;
+  const lastCheck = Number(localStorage.getItem(NOTIF_KEY) || 0);
+  const lastCheckStr = lastCheck > 0 ? new Date(lastCheck).toLocaleString() : (en ? '— never —' : '— nunca —');
+  
+  // Get upcoming follow-ups (next 7 days)
+  const now = Date.now();
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const sevenDays = todayStart.getTime() + 7 * 24 * 60 * 60 * 1000;
+  const upcoming = allInvoices
+    .filter(inv => {
+      if (deriveStatus(inv) === 'paid') return false;
+      if (!inv.nextFollowUp) return false;
+      const followDate = new Date(inv.nextFollowUp + 'T00:00:00').getTime();
+      return followDate >= todayStart.getTime() && followDate <= sevenDays;
+    })
+    .sort((a,b) => a.nextFollowUp.localeCompare(b.nextFollowUp));
+  
+  const oldPending = allInvoices.filter(i => deriveStatus(i) === 'pending' && daysSince(i.createdAt) >= 1).length;
+  const ccUnasked = allInvoices.filter(i => i.paymentReason === 'cc_needed' && !i.ccRequested && deriveStatus(i) !== 'paid').length;
+  const aging = computeAgingBands();
+  
+  // Build the panel
+  let html = '';
+  
+  // Section 1: Master toggle
+  html += `
+    <div style="background:${enabled ? '#ECFDF5' : '#F1F5F9'};border:1px solid ${enabled ? '#6EE7B7' : 'var(--border)'};border-radius:var(--r-md);padding:14px;display:flex;align-items:center;gap:12px;">
+      <div style="font-size:32px;">${enabled ? '🔔' : '🔕'}</div>
+      <div style="flex:1;">
+        <div style="font-weight:700;font-size:14px;color:${enabled ? '#047857' : 'var(--text)'};">${enabled ? (en ? 'Notifications ENABLED' : 'Notificaciones ACTIVAS') : (en ? 'Notifications DISABLED' : 'Notificaciones DESACTIVADAS')}</div>
+        <div style="font-size:11px;color:var(--text-soft);margin-top:2px;">${enabled ? (en ? 'You\'ll get reminders for follow-ups, unsent invoices, and CC issues.' : 'Te llegan recordatorios de follow-ups, facturas sin enviar, y problemas de CC.') : (en ? 'Click below to receive daily reminders.' : 'Click abajo para recibir recordatorios diarios.')}</div>
+      </div>
+      <button class="btn ${enabled ? 'btn-ghost' : 'btn-primary'} btn-sm" onclick="window.toggleNotifications().then(() => renderNotifPanel())" style="flex-shrink:0;">${enabled ? (en ? 'Disable' : 'Desactivar') : (en ? 'Enable' : 'Activar')}</button>
+    </div>
+  `;
+  
+  // Section 2: Status checks (only if enabled)
+  if (enabled) {
+    const checks = [
+      {
+        ok: supported,
+        label: en ? 'Browser supports notifications' : 'Navegador soporta notificaciones',
+        fail: en ? 'Use Chrome or Safari' : 'Usa Chrome o Safari'
+      },
+      {
+        ok: permission === 'granted',
+        label: en ? 'Browser permission granted' : 'Permiso del navegador concedido',
+        fail: permission === 'denied' ? (en ? 'BLOCKED — go to browser settings to allow' : 'BLOQUEADO — ve a Configuración del navegador para permitir') : (en ? 'Not yet granted' : 'No concedido aún'),
+        action: permission === 'denied' ? { label: en ? 'macOS Notifications →' : 'Notificaciones macOS →', onclick: 'window.openMacNotifSettings()' } : null
+      },
+      {
+        ok: swActive,
+        label: en ? 'Service Worker registered (background notifs)' : 'Service Worker registrado (notifs en background)',
+        fail: en ? 'Failed to register — only works with tab open' : 'No registró — solo funciona con pestaña abierta',
+        action: !swActive && swSupported ? { label: en ? 'Re-register' : 'Re-registrar', onclick: 'window.retryRegisterSW()' } : null
+      }
+    ];
+    
+    html += `<div style="border:1px solid var(--border);border-radius:var(--r-md);padding:12px;background:white;">`;
+    html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-soft);margin-bottom:10px;">${en ? '⚙ System health' : '⚙ Estado del sistema'}</div>`;
+    for (const c of checks) {
+      html += `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #F1F5F9;font-size:12.5px;">
+          <span style="font-size:16px;">${c.ok ? '✅' : '❌'}</span>
+          <span style="flex:1;color:${c.ok ? 'var(--text)' : '#991B1B'};">${escapeHtml(c.label)}${!c.ok ? `<br><span style="font-size:11px;color:var(--text-soft);font-style:italic;">${escapeHtml(c.fail)}</span>` : ''}</span>
+          ${c.action ? `<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:3px 8px;" onclick="${c.action.onclick}">${escapeHtml(c.action.label)}</button>` : ''}
+        </div>`;
+    }
+    html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;font-size:12.5px;">
+      <span style="font-size:16px;">⏱</span>
+      <span style="flex:1;color:var(--text-soft);">${en ? 'Last check' : 'Último check'}: <strong style="color:var(--text);">${escapeHtml(lastCheckStr)}</strong></span>
+    </div>`;
+    html += `</div>`;
+  }
+  
+  // Section 3: Today / upcoming pending items (always shown)
+  const totalPending = upcoming.length + oldPending + ccUnasked + aging.critical.count;
+  html += `<div style="border:1px solid var(--border);border-radius:var(--r-md);padding:12px;background:white;">`;
+  html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-soft);margin-bottom:10px;">${en ? '📋 What you\'ll be notified about' : '📋 De qué se te notificará'}</div>`;
+  
+  if (totalPending === 0) {
+    html += `<div style="font-size:13px;color:var(--text-soft);text-align:center;padding:14px;">✨ ${en ? 'All caught up — nothing pending!' : '¡Todo al día — sin pendientes!'}</div>`;
+  } else {
+    if (upcoming.length > 0) {
+      html += `<div style="margin-bottom:8px;">`;
+      html += `<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;">📅 ${en ? `Follow-ups in next 7 days (${upcoming.length})` : `Follow-ups próximos 7 días (${upcoming.length})`}</div>`;
+      for (const inv of upcoming.slice(0, 5)) {
+        const followDate = new Date(inv.nextFollowUp + 'T00:00:00');
+        const daysAway = Math.round((followDate - todayStart) / (1000 * 60 * 60 * 24));
+        const whenLabel = daysAway === 0 ? (en ? 'Today' : 'Hoy') : daysAway === 1 ? (en ? 'Tomorrow' : 'Mañana') : (en ? `In ${daysAway} days` : `En ${daysAway} días`);
+        const whenColor = daysAway === 0 ? '#991B1B' : daysAway <= 2 ? '#9A3412' : 'var(--text-soft)';
+        html += `<div style="font-size:12px;padding:4px 0;display:flex;justify-content:space-between;gap:8px;">
+          <span style="color:var(--text);">#${escapeHtml(inv.invoiceNumber)} ${escapeHtml(inv.customerName)}</span>
+          <span style="color:${whenColor};font-weight:600;font-size:11px;">${whenLabel}</span>
+        </div>`;
+      }
+      if (upcoming.length > 5) {
+        html += `<div style="font-size:11px;color:var(--text-mute);font-style:italic;">+ ${upcoming.length - 5} ${en ? 'more' : 'más'}</div>`;
+      }
+      html += `</div>`;
+    }
+    if (oldPending > 0) {
+      html += `<div style="font-size:12px;color:var(--text);padding:4px 0;">⚠ ${en ? `${oldPending} invoice(s) +24h unsent` : `${oldPending} factura(s) sin enviar +24h`}</div>`;
+    }
+    if (ccUnasked > 0) {
+      html += `<div style="font-size:12px;color:var(--text);padding:4px 0;">💳 ${en ? `${ccUnasked} customer(s) without CC asked` : `${ccUnasked} cliente(s) sin pedir CC`}</div>`;
+    }
+    if (aging.critical.count > 0) {
+      html += `<div style="font-size:12px;color:#991B1B;padding:4px 0;font-weight:600;">🚨 ${en ? `${aging.critical.count} invoice(s) +30 days unpaid (${fmtCurrency(aging.critical.amt)})` : `${aging.critical.count} factura(s) +30 días sin pagar (${fmtCurrency(aging.critical.amt)})`}</div>`;
+    }
+  }
+  html += `</div>`;
+  
+  // Section 4: Action buttons
+  if (enabled && permission === 'granted') {
+    html += `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button class="btn btn-primary btn-sm" onclick="window.testNotification()" style="padding:10px;">🧪 ${en ? 'Fire test now' : 'Disparar test ahora'}</button>
+        <button class="btn btn-secondary btn-sm" onclick="window.fireSummaryNow()" style="padding:10px;">📨 ${en ? 'Send today\'s summary' : 'Mandar resumen de hoy'}</button>
+      </div>`;
+  }
+  
+  // Section 5: Honest disclaimer
+  html += `
+    <details style="margin-top:4px;">
+      <summary style="font-size:11px;color:var(--text-mute);cursor:pointer;">ℹ ${en ? 'How does this actually work?' : '¿Cómo funciona realmente?'}</summary>
+      <div style="font-size:11.5px;color:var(--text-soft);line-height:1.5;background:#F8FAFC;padding:10px;border-radius:var(--r-sm);margin-top:6px;border:1px solid var(--border);">
+        ${en
+          ? `Notifications fire when: (1) you open the dashboard, (2) every 15 min while it stays open, (3) once per day in summary mode. They <strong>do NOT work when the browser is fully closed</strong> — they need at least one tab to be alive (background tabs are OK thanks to Service Worker). For "true push" while everything is closed we'd need Firebase Cloud Messaging, which requires backend setup. For now: leave one Chrome tab pinned with the tracker open and you'll never miss a follow-up.`
+          : `Las notificaciones se disparan: (1) al abrir el dashboard, (2) cada 15 min mientras esté abierto, (3) una vez al día en modo resumen. <strong>NO funcionan con el navegador completamente cerrado</strong> — necesitan al menos una pestaña viva (en background OK gracias al Service Worker). Para "push verdadero" sin el browser abierto necesitaríamos Firebase Cloud Messaging, que requiere backend. Por ahora: deja una pestaña de Chrome pinneada con el tracker abierto y nunca te perderás un follow-up.`}
+      </div>
+    </details>
+  `;
+  
+  body.innerHTML = html;
+}
+
+// Re-register SW (called from panel)
+window.retryRegisterSW = async function() {
+  toast(currentLang === 'en' ? 'Retrying Service Worker registration...' : 'Reintentando registro del Service Worker...', 'success');
+  const reg = await registerNotifSW();
+  setTimeout(() => renderNotifPanel(), 500);
+  if (reg) {
+    toast(currentLang === 'en' ? '✓ Service Worker registered!' : '✓ Service Worker registrado!', 'success');
+  } else {
+    toast(currentLang === 'en' ? '⚠ Still failed. Check console (Cmd+Opt+J).' : '⚠ Sigue fallando. Revisa consola (Cmd+Opt+J).', 'error');
+  }
+};
+
+// Open macOS notification settings
+window.openMacNotifSettings = function() {
+  // Try to open via x-apple-systempreferences (works on macOS)
+  window.location.href = 'x-apple.systempreferences:com.apple.preference.notifications';
+  setTimeout(() => {
+    toast(currentLang === 'en'
+      ? 'If nothing opened: System Settings → Notifications → find Chrome → Allow'
+      : 'Si no se abrió nada: System Settings → Notifications → busca Chrome → Allow', 'success');
+  }, 800);
+};
+
+// Force fire today's summary notification (for testing)
+window.fireSummaryNow = function() {
+  if (Notification.permission !== 'granted') {
+    toast(currentLang === 'en' ? 'Notifications not granted' : 'Notificaciones no permitidas', 'error');
+    return;
+  }
+  // Reset the once-per-day flag and fire
+  localStorage.removeItem(NOTIF_KEY);
+  checkAndNotify(true);
+  toast(currentLang === 'en' ? '✓ Summary fired (check your notifications)' : '✓ Resumen disparado (revisa tus notificaciones)', 'success');
+};
+
 
 window.toggleNotifications = async function() {
   const enabled = localStorage.getItem('aspenNotifEnabled') === '1';
