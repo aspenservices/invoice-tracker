@@ -1467,11 +1467,11 @@ Mahogany Durawood..."></textarea>
         <div style="font-size:12px;color:var(--text-soft);line-height:1.5;margin-bottom:8px;" data-i18n="settings.collections.hint">Cuando marques una factura con CC declinada o sin CC en archivo, el sistema te ofrece mandar un email interno a la persona encargada de cobros.</div>
         <div class="field">
           <label data-i18n="settings.collections.name">Nombre de la persona</label>
-          <input type="text" id="cfgCollectionsName" placeholder="Ej. Nela, Celia" autocomplete="off">
+          <input type="text" id="cfgCollectionsName" placeholder="Ej. Nela, Celia" data-i18n-ph="settings.collections.name.ph" autocomplete="off">
         </div>
         <div class="field">
           <label data-i18n="settings.collections.email">Email de la persona</label>
-          <input type="email" id="cfgCollectionsEmail" placeholder="ej. nela@aspenspas.com" autocomplete="off">
+          <input type="email" id="cfgCollectionsEmail" placeholder="ej. nela@aspenspas.com" data-i18n-ph="settings.collections.email.ph" autocomplete="off">
         </div>
       </div>
     </div>
@@ -1771,6 +1771,8 @@ const I18N = {
     'settings.collections.hint': 'Cuando marques una factura con CC declinada o sin CC en archivo, el sistema te ofrece mandar un email interno a la persona encargada de cobros.',
     'settings.collections.name': 'Nombre de la persona',
     'settings.collections.email': 'Email de la persona',
+    'settings.collections.name.ph': 'Ej. Celia',
+    'settings.collections.email.ph': 'ej. celia@aspenspas.com',
     'header.lang': 'EN',
     'header.lang.title': 'Switch to English',
     'header.settings': 'Configuración',
@@ -1956,6 +1958,8 @@ const I18N = {
     'settings.collections.hint': 'When you mark an invoice with CC declined or no CC on file, the system offers to send an internal email to the person handling collections.',
     'settings.collections.name': 'Person\'s name',
     'settings.collections.email': 'Person\'s email',
+    'settings.collections.name.ph': 'E.g. Celia',
+    'settings.collections.email.ph': 'e.g. celia@aspenspas.com',
     'header.lang': 'ES',
     'header.lang.title': 'Cambiar a Español',
     'header.settings': 'Settings',
