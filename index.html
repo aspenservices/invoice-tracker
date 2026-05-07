@@ -1558,55 +1558,55 @@ Mahogany Durawood..."></textarea>
 <div class="modal-backdrop" id="paymentModal">
   <div class="modal">
     <div class="modal-header">
-      <span class="modal-title">💳 Estado de cobro <span id="psInvNum" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text-soft);font-weight:500;"></span></span>
+      <span class="modal-title"><span data-i18n="payment.title">💳 Estado de cobro</span> <span id="psInvNum" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text-soft);font-weight:500;"></span></span>
       <button class="modal-close" onclick="closeModal('paymentModal')">×</button>
     </div>
     <div class="modal-body">
       <div class="ps-form-grid">
         <div>
-          <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:8px;">Método de pago (si ya cobró)</label>
+          <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:8px;" data-i18n="payment.method.label">Método de pago (si ya cobró)</label>
           <div class="ps-radio-group" id="psMethodGroup" style="grid-template-columns:repeat(3,1fr);">
-            <div class="ps-radio" data-method="">— Sin pagar —</div>
-            <div class="ps-radio" data-method="check">📝 Cheque</div>
-            <div class="ps-radio" data-method="cash">💵 Efectivo</div>
-            <div class="ps-radio" data-method="credit_card">💳 Tarjeta</div>
-            <div class="ps-radio" data-method="ach">🏦 ACH</div>
-            <div class="ps-radio" data-method="zelle">📱 Zelle</div>
-            <div class="ps-radio" data-method="venmo">📱 Venmo</div>
-            <div class="ps-radio" data-method="square">⬛ Square</div>
-            <div class="ps-radio" data-method="other">❓ Otro</div>
+            <div class="ps-radio" data-method="" data-i18n="payment.method.none">— Sin pagar —</div>
+            <div class="ps-radio" data-method="check" data-i18n="payment.method.check">📝 Cheque</div>
+            <div class="ps-radio" data-method="cash" data-i18n="payment.method.cash">💵 Efectivo</div>
+            <div class="ps-radio" data-method="credit_card" data-i18n="payment.method.cc">💳 Tarjeta</div>
+            <div class="ps-radio" data-method="ach" data-i18n="payment.method.ach">🏦 ACH</div>
+            <div class="ps-radio" data-method="zelle" data-i18n="payment.method.zelle">📱 Zelle</div>
+            <div class="ps-radio" data-method="venmo" data-i18n="payment.method.venmo">📱 Venmo</div>
+            <div class="ps-radio" data-method="square" data-i18n="payment.method.square">⬛ Square</div>
+            <div class="ps-radio" data-method="other" data-i18n="payment.method.other">❓ Otro</div>
           </div>
-          <input type="text" id="psMethodRef" placeholder="# de cheque / últimos 4 de CC / referencia (opcional)" style="width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px;">
+          <input type="text" id="psMethodRef" data-i18n-ph="payment.method.ref.ph" placeholder="# de cheque / últimos 4 de CC / referencia (opcional)" style="width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px;">
         </div>
         <div>
-          <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:8px;">Motivo de no cobro</label>
+          <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:8px;" data-i18n="payment.reason.label">Motivo de no cobro</label>
           <div class="ps-radio-group" id="psReasonGroup">
-            <div class="ps-radio" data-val="cc_needed">📞 Falta pedir CC</div>
-            <div class="ps-radio" data-val="cc_declined">❌ CC rechazada</div>
-            <div class="ps-radio" data-val="no_response">🔇 Cliente no contesta</div>
-            <div class="ps-radio" data-val="partial">💵 Pago parcial</div>
-            <div class="ps-radio" data-val="disputed">⚠️ En disputa</div>
-            <div class="ps-radio" data-val="">— Ninguno —</div>
+            <div class="ps-radio" data-val="cc_needed" data-i18n="payment.reason.cc_needed">📞 Falta pedir CC</div>
+            <div class="ps-radio" data-val="cc_declined" data-i18n="payment.reason.cc_declined">❌ CC rechazada</div>
+            <div class="ps-radio" data-val="no_response" data-i18n="payment.reason.no_response">🔇 Cliente no contesta</div>
+            <div class="ps-radio" data-val="partial" data-i18n="payment.reason.partial">💵 Pago parcial</div>
+            <div class="ps-radio" data-val="disputed" data-i18n="payment.reason.disputed">⚠️ En disputa</div>
+            <div class="ps-radio" data-val="" data-i18n="payment.reason.none">— Ninguno —</div>
           </div>
         </div>
         <label class="ps-checkbox-row">
           <input type="checkbox" id="psCcRequested">
-          <span>Ya se le pidió el número de tarjeta</span>
+          <span data-i18n="payment.cc.requested">Ya se le pidió el número de tarjeta</span>
         </label>
         <div>
-          <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:6px;">Próximo follow-up (recordatorio)</label>
+          <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:6px;" data-i18n="payment.followup.label">Próximo follow-up (recordatorio)</label>
           <input type="date" id="psNextFollowup" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;">
-          <div style="font-size:11px;color:var(--text-mute);margin-top:4px;">Aparecerá en banner de alerta cuando llegue la fecha</div>
+          <div style="font-size:11px;color:var(--text-mute);margin-top:4px;" data-i18n="payment.followup.hint">Aparecerá en banner de alerta cuando llegue la fecha</div>
         </div>
         <div>
-          <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:6px;">Nota interna del cobro</label>
-          <textarea id="psNote" placeholder="Ej: Cliente pidió volver a llamar el lunes" style="width:100%;min-height:60px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;"></textarea>
+          <label style="font-size:12px;font-weight:600;color:var(--text-soft);display:block;margin-bottom:6px;" data-i18n="payment.note.label">Nota interna del cobro</label>
+          <textarea id="psNote" data-i18n-ph="payment.note.ph" placeholder="Ej: Cliente pidió volver a llamar el lunes" style="width:100%;min-height:60px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-family:inherit;"></textarea>
         </div>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('paymentModal')">Cancelar</button>
-      <button class="btn btn-primary" onclick="window.savePaymentStatus()">Guardar</button>
+      <button class="btn btn-ghost" onclick="closeModal('paymentModal')" data-i18n="form.cancel">Cancelar</button>
+      <button class="btn btn-primary" onclick="window.savePaymentStatus()" data-i18n="form.save">Guardar</button>
     </div>
   </div>
 </div>
@@ -1728,6 +1728,31 @@ const I18N = {
     'card.resend': 'Reenviar',
     'card.markPaid': '✓ Pagada',
     'card.payment.title': 'Estado de cobro',
+    // Payment status modal
+    'payment.title': '💳 Estado de cobro',
+    'payment.method.label': 'Método de pago (si ya cobró)',
+    'payment.method.none': '— Sin pagar —',
+    'payment.method.check': '📝 Cheque',
+    'payment.method.cash': '💵 Efectivo',
+    'payment.method.cc': '💳 Tarjeta',
+    'payment.method.ach': '🏦 ACH',
+    'payment.method.zelle': '📱 Zelle',
+    'payment.method.venmo': '📱 Venmo',
+    'payment.method.square': '⬛ Square',
+    'payment.method.other': '❓ Otro',
+    'payment.method.ref.ph': '# de cheque / últimos 4 de CC / referencia (opcional)',
+    'payment.reason.label': 'Motivo de no cobro',
+    'payment.reason.cc_needed': '📞 Falta pedir CC',
+    'payment.reason.cc_declined': '❌ CC rechazada',
+    'payment.reason.no_response': '🔇 Cliente no contesta',
+    'payment.reason.partial': '💵 Pago parcial',
+    'payment.reason.disputed': '⚠️ En disputa',
+    'payment.reason.none': '— Ninguno —',
+    'payment.cc.requested': 'Ya se le pidió el número de tarjeta',
+    'payment.followup.label': 'Próximo follow-up (recordatorio)',
+    'payment.followup.hint': 'Aparecerá en banner de alerta cuando llegue la fecha',
+    'payment.note.label': 'Nota interna del cobro',
+    'payment.note.ph': 'Ej: Cliente pidió volver a llamar el lunes',
     'card.snooze.title': 'Snooze',
     'card.unsnooze.title': 'Quitar snooze',
     'card.edit': 'Editar',
@@ -1882,6 +1907,31 @@ const I18N = {
     'card.resend': 'Resend',
     'card.markPaid': '✓ Paid',
     'card.payment.title': 'Payment status',
+    // Payment status modal
+    'payment.title': '💳 Payment status',
+    'payment.method.label': 'Payment method (if already collected)',
+    'payment.method.none': '— Unpaid —',
+    'payment.method.check': '📝 Check',
+    'payment.method.cash': '💵 Cash',
+    'payment.method.cc': '💳 Credit card',
+    'payment.method.ach': '🏦 ACH',
+    'payment.method.zelle': '📱 Zelle',
+    'payment.method.venmo': '📱 Venmo',
+    'payment.method.square': '⬛ Square',
+    'payment.method.other': '❓ Other',
+    'payment.method.ref.ph': 'Check # / last 4 of CC / reference (optional)',
+    'payment.reason.label': 'Reason for no payment',
+    'payment.reason.cc_needed': '📞 CC not requested yet',
+    'payment.reason.cc_declined': '❌ CC declined',
+    'payment.reason.no_response': '🔇 Customer not responding',
+    'payment.reason.partial': '💵 Partial payment',
+    'payment.reason.disputed': '⚠️ Disputed',
+    'payment.reason.none': '— None —',
+    'payment.cc.requested': 'CC number has been requested',
+    'payment.followup.label': 'Next follow-up (reminder)',
+    'payment.followup.hint': 'Will appear in alerts banner when the date arrives',
+    'payment.note.label': 'Internal payment note',
+    'payment.note.ph': 'E.g.: Customer asked to call back on Monday',
     'card.snooze.title': 'Snooze',
     'card.unsnooze.title': 'Remove snooze',
     'card.edit': 'Edit',
@@ -4289,21 +4339,47 @@ window.searchTixForImport = function(e) {
     resEl.innerHTML = '';
     return;
   }
-  resEl.innerHTML = '<div style="font-size:11px;color:var(--text-mute);font-style:italic;padding:4px;">Buscando…</div>';
+  const en = currentLang === 'en';
+  resEl.innerHTML = `<div style="font-size:11px;color:var(--text-mute);font-style:italic;padding:4px;">${en ? 'Searching…' : 'Buscando…'}</div>`;
   _tixSearchDebounce = setTimeout(async () => {
     try {
-      const results = await searchTicketsCustomers(q);
+      // Force fetch the full list so we have count + samples for diagnostic
+      const allCustomers = await fetchAllTicketsCustomers();
+      const results = smartMatchCustomer(q, allCustomers);
+      
       if (results.length === 0) {
-        resEl.innerHTML = '<div style="font-size:11px;color:var(--text-mute);padding:4px;">Sin resultados en TICKETS DB.</div>';
+        // Diagnostic info: show how many customers TICKETS has and a few sample names
+        const totalInTickets = allCustomers.length;
+        if (totalInTickets === 0) {
+          // Likely permissions issue or empty DB
+          resEl.innerHTML = `
+            <div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:var(--r-sm);padding:10px;">
+              <div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:4px;">⚠ ${en ? 'TICKETS database returned 0 customers' : 'TICKETS DB devolvió 0 clientes'}</div>
+              <div style="font-size:11px;color:#78350F;line-height:1.4;">
+                ${en
+                  ? 'This usually means: (a) Firestore rules block public read, OR (b) the database is empty. Open browser console (Cmd+Opt+J) and look for HTTP 403 errors. Solution: deploy the firestore.rules from terminal.'
+                  : 'Esto normalmente significa: (a) las reglas de Firestore bloquean la lectura pública, O (b) la base de datos está vacía. Abre la consola del navegador (Cmd+Opt+J) y busca errores HTTP 403. Solución: deploya el archivo firestore.rules desde terminal.'}
+              </div>
+            </div>`;
+        } else {
+          // DB has customers but no match for this query — show first 3 names as samples
+          const samples = allCustomers.slice(0, 3).map(c => c.name).filter(Boolean).slice(0, 3);
+          resEl.innerHTML = `
+            <div style="font-size:11px;color:var(--text-mute);padding:6px;">
+              <div style="margin-bottom:4px;">${en ? `No match in ${totalInTickets} customers from TICKETS DB.` : `Sin match en ${totalInTickets} clientes de TICKETS DB.`}</div>
+              ${samples.length > 0 ? `<div style="color:var(--text-soft);font-size:10px;">${en ? 'Examples in DB' : 'Ejemplos en DB'}: ${samples.map(s => escapeHtml(s)).join(' · ')}</div>` : ''}
+              <div style="margin-top:6px;color:var(--text-soft);font-size:10px;">${en ? 'Try with last name only, or check spelling.' : 'Intenta solo con apellido, o verifica ortografía.'}</div>
+            </div>`;
+        }
         return;
       }
       resEl.innerHTML = results.slice(0, 5).map((t, idx) => `
         <div style="padding:8px 10px;background:white;border:1px solid #BFDBFE;border-radius:var(--r-sm);margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
           <div style="min-width:0;flex:1;">
             <div style="font-size:13px;font-weight:600;">${escapeHtml(t.name)}</div>
-            <div style="font-size:11px;color:var(--text-soft);">${escapeHtml(t.email || '')}${t.phone ? ' · ' + escapeHtml(t.phone) : ''}${t.address ? ' · ' + escapeHtml(t.address) : ''}${t.visits ? ` · ${t.visits} visitas` : ''}</div>
+            <div style="font-size:11px;color:var(--text-soft);">${escapeHtml(t.email || '')}${t.phone ? ' · ' + escapeHtml(t.phone) : ''}${t.address ? ' · ' + escapeHtml(t.address) : ''}${t.visits ? ` · ${t.visits} ${en ? 'visits' : 'visitas'}` : ''}</div>
           </div>
-          <button type="button" class="btn btn-primary btn-sm" onclick='window.applyTixImport(${idx})'>↓ Importar</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick='window.applyTixImport(${idx})'>↓ ${en ? 'Import' : 'Importar'}</button>
         </div>
       `).join('');
       window._tixLastResults = results;
@@ -4421,7 +4497,7 @@ window.savePaymentStatus = async function() {
     }
   }
   await updateInvoiceData(psEditingId, updates);
-  toast(psSelectedMethod ? '✓ Marcada como pagada' : 'Estado de cobro actualizado', 'success');
+  toast(psSelectedMethod ? (currentLang === 'en' ? '✓ Marked as paid' : '✓ Marcada como pagada') : (currentLang === 'en' ? 'Payment status updated' : 'Estado de cobro actualizado'), 'success');
   closeModal('paymentModal');
 };
 
