@@ -1406,9 +1406,13 @@ Mahogany Durawood..."></textarea>
         <input type="text" id="setFromName" placeholder="Aspen Spas Service">
       </div>
 
-      <div class="field" style="margin-bottom:18px;">
-        <label>🔥 Configuración de Firebase (pega el bloque JSON completo)</label>
-        <textarea id="setFirebaseConfig" placeholder='{
+      <!-- ═══ ADVANCED CONFIG (hidden by default — already hardcoded) ═══ -->
+      <details style="margin-bottom:18px;">
+        <summary style="cursor:pointer;font-size:12px;color:var(--text-mute);padding:8px 0;user-select:none;">⚙ Configuración avanzada (Firebase + TICKETS) — solo si sabes lo que haces</summary>
+        <div style="padding-top:12px;">
+          <div class="field" style="margin-bottom:18px;">
+            <label>🔥 Configuración de Firebase (pega el bloque JSON completo)</label>
+            <textarea id="setFirebaseConfig" placeholder='{
   "apiKey": "...",
   "authDomain": "invoice-daily-f170e.firebaseapp.com",
   "databaseURL": "https://invoice-daily-f170e-default-rtdb.firebaseio.com",
@@ -1417,49 +1421,44 @@ Mahogany Durawood..."></textarea>
   "messagingSenderId": "...",
   "appId": "..."
 }' style="min-height:160px; font-family:'JetBrains Mono', monospace; font-size:12px;"></textarea>
-        <span class="field-hint">Copia este bloque desde tu Service Dashboard existente. Si lo dejas vacío, todo se guarda solo en este navegador (modo local).</span>
-      </div>
+            <span class="field-hint">Si lo dejas vacío, usa el config hardcodeado de Aspen Spas (lo normal).</span>
+          </div>
 
-      <div style="background:var(--accent-soft); padding:12px 14px; border-radius:var(--r-md); font-size:12px; color:var(--text); line-height:1.6;">
-        <strong>💡 Dónde encontrar la config de Firebase:</strong><br>
-        1. Abre tu Service Dashboard existente (`invoice-daily-f170e`)<br>
-        2. En GitHub o tu archivo local, busca el bloque que dice <code>firebaseConfig = {…}</code><br>
-        3. Copia desde la llave <code>{</code> hasta la llave <code>}</code> y pégalo arriba
-      </div>
+          <hr style="border:none;border-top:1px solid var(--border);margin:24px 0;">
 
-      <hr style="border:none;border-top:1px solid var(--border);margin:24px 0;">
-
-      <div class="field" style="margin-bottom:14px;">
-        <label>🔌 Conectar con TICKETS database (autocomplete cruzado)</label>
-        <span class="field-hint">Para que el autocompletado del cliente busque también en el TECH-TICKETS app y la sección "Tickets de servicio" del modal de cliente cargue datos.</span>
-      </div>
-      <div class="field" style="margin-bottom:14px;">
-        <label>API Key</label>
-        <input type="text" id="setTixApiKey" placeholder="AIzaSy..." autocomplete="off">
-      </div>
-      <div class="field" style="margin-bottom:14px;">
-        <label>Project ID</label>
-        <input type="text" id="setTixProjectId" placeholder="tech-tickets-xxxx" autocomplete="off">
-      </div>
-      <div class="form-grid" style="margin-bottom:14px;">
-        <div class="field">
-          <label>Colección de tickets</label>
-          <input type="text" id="setTixTicketsColl" placeholder="tickets" autocomplete="off" value="tickets">
+          <div class="field" style="margin-bottom:14px;">
+            <label>🔌 Conectar con TICKETS database (autocomplete cruzado)</label>
+            <span class="field-hint">Para que el autocompletado del cliente busque también en el TECH-TICKETS app. Si lo dejas vacío usa el config hardcodeado.</span>
+          </div>
+          <div class="field" style="margin-bottom:14px;">
+            <label>API Key</label>
+            <input type="text" id="setTixApiKey" placeholder="AIzaSy..." autocomplete="off">
+          </div>
+          <div class="field" style="margin-bottom:14px;">
+            <label>Project ID</label>
+            <input type="text" id="setTixProjectId" placeholder="tech-tickets-xxxx" autocomplete="off">
+          </div>
+          <div class="form-grid" style="margin-bottom:14px;">
+            <div class="field">
+              <label>Colección de tickets</label>
+              <input type="text" id="setTixTicketsColl" placeholder="tickets" autocomplete="off" value="tickets">
+            </div>
+            <div class="field">
+              <label>Colección de clientes (opcional)</label>
+              <input type="text" id="setTixCustColl" placeholder="customers (vacío = derivar de tickets)" autocomplete="off">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;">
+            <button class="btn btn-secondary btn-sm" onclick="window.testTicketsConnection()">🧪 Probar conexión</button>
+            <span id="tixTestResult" style="font-size:12px;"></span>
+          </div>
+          <div style="background:#FEF3C7; padding:10px 12px; border-radius:var(--r-md); font-size:11px; color:#92400E; line-height:1.5;">
+            <strong>Reglas Firestore necesarias</strong> en el proyecto TICKETS para que se pueda leer:<br>
+            <code style="display:block;margin-top:4px;font-size:10px;">match /databases/{database}/documents { match /{doc=**} { allow read: if true; } }</code>
+            <br>(Esto permite lectura pública. Si necesitas privacidad, configura auth — avísame.)
+          </div>
         </div>
-        <div class="field">
-          <label>Colección de clientes (opcional)</label>
-          <input type="text" id="setTixCustColl" placeholder="customers (vacío = derivar de tickets)" autocomplete="off">
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;">
-        <button class="btn btn-secondary btn-sm" onclick="window.testTicketsConnection()">🧪 Probar conexión</button>
-        <span id="tixTestResult" style="font-size:12px;"></span>
-      </div>
-      <div style="background:#FEF3C7; padding:10px 12px; border-radius:var(--r-md); font-size:11px; color:#92400E; line-height:1.5;">
-        <strong>Reglas Firestore necesarias</strong> en el proyecto TICKETS para que se pueda leer:<br>
-        <code style="display:block;margin-top:4px;font-size:10px;">match /databases/{database}/documents { match /{doc=**} { allow read: if true; } }</code>
-        <br>(Esto permite lectura pública. Si necesitas privacidad, configura auth — avísame.)
-      </div>
+      </details>
 
       <!-- ─── COLLECTIONS TEAM EMAIL ─── -->
       <div style="margin-top:18px;padding-top:18px;border-top:1px solid var(--border);">
