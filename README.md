@@ -403,19 +403,94 @@ Click el botón **`EN`** o **`ES`** en el header (al lado del 🔕). Cambia todo
 
 ## 🛠 Deployment
 
+### 🚀 Setup completo desde terminal (RECOMENDADO)
+
+**ES** — En lugar de ir a Firebase Console en el navegador, configura las reglas directamente desde terminal con un solo comando:
+
+**EN** — Instead of going to Firebase Console in the browser, configure the rules directly from terminal with one command:
+
 ```bash
-# Pasos típicos / typical workflow
-cd ~/Documents/invoice-tracker  # o donde tengas clonado el repo
-cp ~/Downloads/index.html .     # reemplaza con nueva versión
+# 1. Clona el repo (primera vez)
+cd ~/Documents
+git clone https://github.com/aspenservices/invoice-tracker.git
+cd invoice-tracker
+
+# 2. Coloca los archivos de Firebase config (los que vienen en el ZIP):
+#    - database.rules.json
+#    - firebase.json
+#    - .firebaserc
+#    - setup-firebase.sh
+#    - firestore.rules
+#    - setup-tickets-rules.sh
+
+# 3. Ejecuta el setup script (la primera vez te pide login con Google)
+./setup-firebase.sh
+
+# Eso es todo. El script:
+# • Verifica que tengas firebase-tools (lo instala si no)
+# • Verifica que estés logueado (te abre el navegador si no)
+# • Verifica acceso al proyecto invoice-daily-f170e
+# • Te muestra las reglas y te pide confirmación
+# • Las deploya a Firebase
+```
+
+### 🔌 Reglas de TECH-TICKETS Firestore (para que Invoice Tracker lea clientes)
+
+```bash
+./setup-tickets-rules.sh
+# Aplica reglas a tech-tickets-a9485 que permiten lectura pública
+```
+
+### 📤 Deploy del index.html (GitHub Pages)
+
+```bash
+cd ~/Documents/invoice-tracker
+cp ~/Downloads/index.html .   # reemplaza con la nueva versión
 git add index.html
 git commit -m "Updated tracker — feature X"
 git push origin main
-
-# GitHub Pages despliega automáticamente
-# Live en ~30 segundos en https://aspenservices.github.io/invoice-tracker/
+# GitHub Pages despliega automáticamente en ~30 segundos
+# Live en https://aspenservices.github.io/invoice-tracker/
 ```
 
-> 💡 Si haces cambios desde la app de GitHub web (subiendo el archivo via drag-and-drop), también funciona — pero por terminal es más limpio.
+### 🔄 Deploy combinado (todo en uno)
+
+```bash
+cd ~/Documents/invoice-tracker
+
+# Actualiza el código
+cp ~/Downloads/index.html .
+cp ~/Downloads/README.md .
+git add . && git commit -m "Update + Firebase rules" && git push
+
+# Aplica reglas de Firebase
+./setup-firebase.sh
+```
+
+### ⚙ Manual (sin scripts) — paso a paso
+
+Si prefieres hacer cada paso manualmente:
+
+```bash
+# Instalar firebase-tools (una sola vez en tu Mac)
+npm install -g firebase-tools
+
+# Login con Google (una sola vez)
+firebase login
+
+# Inicializar el proyecto en una carpeta
+cd ~/Documents/invoice-tracker
+firebase use --add invoice-daily-f170e
+
+# Deploy reglas de Realtime Database
+firebase deploy --only database
+
+# Deploy reglas de Firestore (en otra carpeta para el proyecto tech-tickets-a9485)
+firebase use --add tech-tickets-a9485
+firebase deploy --only firestore:rules
+```
+
+> 💡 Nela ya usa este mismo workflow para deployar el dashboard de payroll: `cd ~/Documents/aspen-spas-payroll && firebase deploy`. Es exactamente el mismo patrón.
 
 ---
 

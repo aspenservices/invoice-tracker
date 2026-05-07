@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "invoiceTracker": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
