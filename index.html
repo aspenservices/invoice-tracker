@@ -4916,19 +4916,51 @@ window.savePaymentStatus = async function() {
     nextFollowUp: document.getElementById('psNextFollowup').value || null,
     paymentNote: document.getElementById('psNote').value.trim() || null
   };
-  // If a payment method was selected, auto-mark invoice as paid
+  // If a payment method was selected, auto-mark invoice as paid — EXCEPT for checks not yet deposited
   let willMarkPaid = false;
+  let willMarkCheckPending = false;
+  let willUnmarkPaid = false;
   if (psSelectedMethod) {
     const inv = allInvoices.find(i => i.id === psEditingId);
+    // Special logic for checks: only mark as PAID when the check is "deposited" at the bank.
+    // If it's "with_tech" / "office" / "other", the money isn't actually in our hands yet.
+    const checkPendingDeposit = (psSelectedMethod === 'check' && updates.checkLocation !== 'deposited');
+    
     if (inv && inv.status !== 'paid') {
-      updates.status = 'paid';
-      updates.paidAt = Date.now();
-      updates.paymentReason = null;
-      willMarkPaid = true;
+      if (checkPendingDeposit) {
+        // Don't mark as paid — keep status as pending, but record the method + location
+        willMarkCheckPending = true;
+        updates.paymentReason = null;
+      } else {
+        // Cash / CC / ACH / Other / Check (deposited) → mark as paid
+        updates.status = 'paid';
+        updates.paidAt = Date.now();
+        updates.paymentReason = null;
+        willMarkPaid = true;
+      }
+    } else if (inv && inv.status === 'paid' && checkPendingDeposit) {
+      // Was paid, but now user is saying check is NOT yet deposited → un-mark as paid
+      updates.status = 'pending';
+      updates.paidAt = null;
+      willUnmarkPaid = true;
     }
   }
   await updateInvoiceData(psEditingId, updates);
-  toast(psSelectedMethod ? (currentLang === 'en' ? '✓ Marked as paid' : '✓ Marcada como pagada') : (currentLang === 'en' ? 'Payment status updated' : 'Estado de cobro actualizado'), 'success');
+  let toastMsg;
+  if (willMarkPaid) {
+    toastMsg = currentLang === 'en' ? '✓ Marked as paid' : '✓ Marcada como pagada';
+  } else if (willMarkCheckPending) {
+    toastMsg = currentLang === 'en'
+      ? '📝 Check recorded — invoice stays PENDING until check is deposited at bank'
+      : '📝 Cheque registrado — factura sigue PENDIENTE hasta que se deposite en el banco';
+  } else if (willUnmarkPaid) {
+    toastMsg = currentLang === 'en'
+      ? '⏪ Invoice un-marked as paid — pending check deposit'
+      : '⏪ Factura des-marcada como pagada — pendiente depósito del cheque';
+  } else {
+    toastMsg = currentLang === 'en' ? 'Payment status updated' : 'Estado de cobro actualizado';
+  }
+  toast(toastMsg, 'success');
   closeModal('paymentModal');
   
   // ─── If payment problem (declined/no-CC), offer to notify collections team ───
@@ -6506,6 +6538,10 @@ function renderInvoiceCardHtml(inv) {
   const daysLabel = days !== null && days !== undefined ? (s === 'pending' ? t('card.daysSinceCreated', days) : t('card.daysSinceSent', days)) : '';
   const payPill = inv.paymentReason && s !== 'paid' ? `<span class="payment-pill ${inv.paymentReason}">${paymentReasonLabel(inv.paymentReason)}</span>` : '';
   const methodPill = inv.paymentMethod && s === 'paid' ? `<span class="payment-pill" style="background:var(--paid-bg);color:var(--paid);">${paymentMethodLabel(inv.paymentMethod)}${inv.paymentRef ? ' · ' + escapeHtml(inv.paymentRef) : ''}</span>` : '';
+  // Special pill: check collected but not yet deposited (still pending)
+  const checkPendingPill = (inv.paymentMethod === 'check' && inv.checkLocation && inv.checkLocation !== 'deposited' && s !== 'paid') 
+    ? `<span class="payment-pill" style="background:#FEF9C3;color:#854D0E;border:1px solid #FDE047;">📝 ${currentLang === 'en' ? 'CHECK PENDING DEPOSIT' : 'CHEQUE SIN DEPOSITAR'}${inv.checkLocation === 'with_tech' && inv.technician ? ' · ' + escapeHtml(inv.technician) : ''}${inv.checkLocation === 'office' ? ' · ' + (currentLang === 'en' ? 'In office' : 'En oficina') : ''}</span>`
+    : '';
   const ccBadge = inv.ccRequested && s !== 'paid' ? `<span style="font-size:10px;color:var(--sent);font-weight:600;" title="${escapeHtml(t('card.ccRequestedTitle'))}">${escapeHtml(t('card.ccRequested'))}</span>` : '';
   const fuLabel = inv.nextFollowUp && s !== 'paid' ? `<span style="color:var(--followup);font-size:11px;">${escapeHtml(t('card.followupOn', inv.nextFollowUp))}</span>` : '';
   // Snooze indicator
@@ -6526,6 +6562,7 @@ function renderInvoiceCardHtml(inv) {
           <span class="status-badge ${s}">${statusLabel(s)}</span>
           ${payPill}
           ${methodPill}
+          ${checkPendingPill}
           ${stageBadge}
         </div>
         <div class="invoice-meta">
