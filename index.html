@@ -3950,6 +3950,64 @@ window.generateEmlAndDownload = function() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   
   toast(pdfBase64 ? 'Email descargado con PDF adjunto. Doble click en el .eml para abrirlo' : 'Email descargado (sin PDF). Doble click para abrir', 'success');
+  
+  // After download, ask if she actually clicked Send in Outlook (same dynamic as internal alerts)
+  setTimeout(() => askConfirmSendCustomer(sendingId, currentEmailStage), 600);
+};
+
+// ════════════════════════════════════════════════════════════
+// CUSTOMER EMAIL CONFIRMATION — ask if user actually sent it
+// If yes: mark invoice as 'sent' (calls markAsSent equivalent)
+// ════════════════════════════════════════════════════════════
+window.askConfirmSendCustomer = function(invoiceId, stage) {
+  const inv = allInvoices.find(i => i.id === invoiceId);
+  if (!inv) return;
+  
+  const en = currentLang === 'en';
+  const stageLabel = ({1: en ? '1st send' : 'Primer envío', 2: en ? 'Reminder' : 'Recordatorio', 3: en ? 'Past due' : 'Vencida'})[stage];
+  
+  const overlay = document.createElement('div');
+  overlay.id = 'confirmSendOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:white;border-radius:16px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,0.3);">
+      <div style="font-size:36px;text-align:center;margin-bottom:8px;">📤</div>
+      <h3 style="margin:0 0 12px 0;text-align:center;font-size:18px;color:#0F172A;">${en ? 'Did you send the email?' : '¿Enviaste el email?'}</h3>
+      <p style="margin:0 0 20px 0;text-align:center;font-size:14px;color:#475569;line-height:1.5;">
+        ${en
+          ? `In Outlook, did you click <strong>Send</strong> on the email to <strong>${escapeHtml(inv.customerName)}</strong>?<br>(${stageLabel})`
+          : `En Outlook, ¿le diste click a <strong>Send</strong> al email para <strong>${escapeHtml(inv.customerName)}</strong>?<br>(${stageLabel})`}
+      </p>
+      <p style="margin:0 0 20px 0;text-align:center;font-size:12px;color:#94A3B8;font-style:italic;">
+        ${en ? 'Verify it appears in Outlook → Sent Items' : 'Verifica que aparezca en Outlook → Sent Items'}
+      </p>
+      <div style="display:flex;gap:8px;flex-direction:column;">
+        <button onclick="window.confirmSendCustomerYes('${invoiceId}', ${stage})" style="background:#16A34A;color:white;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+          ✅ ${en ? 'Yes — mark invoice as sent' : 'Sí lo envié — marcar factura como enviada'}
+        </button>
+        <button onclick="window.confirmSendNo()" style="background:#F1F5F9;color:#475569;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;">
+          ⏰ ${en ? "Not yet — I'll send it later" : 'Aún no — lo envío después'}
+        </button>
+      </div>
+      <p style="font-size:11px;color:#94A3B8;text-align:center;margin:14px 0 0 0;font-style:italic;">
+        ${en ? 'You can still click "Mark as sent" manually in the modal' : 'También puedes click "Marcar como enviada" manualmente en el modal'}
+      </p>
+    </div>`;
+  document.body.appendChild(overlay);
+};
+
+window.confirmSendCustomerYes = async function(invoiceId, stage) {
+  // Same as markAsSent but takes invoiceId explicitly
+  const inv = allInvoices.find(i => i.id === invoiceId);
+  if (!inv) return;
+  const now = Date.now();
+  const history = [...(inv.history || []), { ts: now, action: 'sent', stage: stage, confirmed: true }];
+  await updateInvoiceData(invoiceId, { status: 'sent', sentAt: now, history, lastEmailStage: stage });
+  const overlay = document.getElementById('confirmSendOverlay');
+  if (overlay) overlay.remove();
+  closeModal('sendModal');
+  const stageLbl = ({1: t('stage.firstSend'), 2: t('stage.reminder'), 3: t('stage.pastDue')})[stage];
+  toast(t('toast.markedSent', inv.invoiceNumber, stageLbl), 'success');
 };
 
 // ════════════════════════════════════════════════════════════
@@ -4910,11 +4968,12 @@ window.openPaymentModal = function(id) {
   if (alertEvents.length > 0) {
     const en = currentLang === 'en';
     alertHistList.innerHTML = alertEvents.slice().reverse().map(ev => {
+      const histIdx = (inv.history || []).indexOf(ev);
       const when = new Date(ev.ts);
       const whenStr = when.toLocaleString();
       const icon = ev.action === 'alert_check' ? '💵' : '🚨';
       const typeLabel = ev.action === 'alert_check'
-        ? (en ? 'Check tracking alert' : 'Alerta de tracking de cheque')
+        ? (en ? 'Check tracking alert' : 'Alerta tracking de cheque')
         : (en ? 'Collections alert' : 'Alerta de cobros');
       let extra = '';
       if (ev.action === 'alert_check' && ev.location) {
@@ -4934,7 +4993,23 @@ window.openPaymentModal = function(id) {
         extra = ` — ${reasonMap[ev.reason] || ev.reason}`;
       }
       const pdfNote = ev.hasPdf ? ' 📎' : '';
-      return `<div style="padding:4px 0;border-bottom:1px solid var(--border);">${icon} <strong>${escapeHtml(typeLabel)}</strong>${pdfNote}<br>→ ${escapeHtml(ev.recipientName || '')} (${escapeHtml(ev.recipient || '—')})${extra}<br><span style="color:var(--text-mute);font-size:11px;">${escapeHtml(whenStr)}</span></div>`;
+      
+      // Status badge: confirmed (green ✓ Sent) vs not confirmed (yellow ⏰ Generated)
+      let statusBadge, confirmBtn = '';
+      if (ev.confirmed) {
+        const confirmTime = ev.confirmedAt ? new Date(ev.confirmedAt).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) : '';
+        statusBadge = `<span style="background:#DCFCE7;color:#15803D;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;">✅ ${en ? 'SENT' : 'ENVIADO'}${confirmTime ? ' · ' + confirmTime : ''}</span>`;
+      } else {
+        statusBadge = `<span style="background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;">⏰ ${en ? 'GENERATED — not confirmed' : 'GENERADO — sin confirmar'}</span>`;
+        confirmBtn = `<button onclick="window.confirmSendYesFromHistory('${inv.id}', ${histIdx})" style="margin-top:6px;background:#16A34A;color:white;border:0;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✅ ${en ? 'I sent it — mark as sent' : 'Sí lo envié — marcar enviado'}</button>`;
+      }
+      
+      return `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${icon} <strong>${escapeHtml(typeLabel)}</strong>${pdfNote} ${statusBadge}</div>
+        <div style="margin-top:4px;">→ ${escapeHtml(ev.recipientName || '')} (${escapeHtml(ev.recipient || '—')})${extra}</div>
+        <div style="color:var(--text-mute);font-size:11px;margin-top:2px;">${escapeHtml(whenStr)}</div>
+        ${confirmBtn}
+      </div>`;
     }).join('');
     alertHistDiv.style.display = 'block';
   } else {
@@ -5216,23 +5291,105 @@ async function generateCollectionsEml(inv, reason) {
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
   
   const hasPdf = !!pdfBase64;
-  // ─── Log to invoice history (audit trail) ───
+  // ─── Log to invoice history (audit trail) — initially as "generated" only ───
   const histEntry = {
     ts: Date.now(),
     action: 'alert_collections',
     recipient: collectionsEmail,
     recipientName: collectionsName || 'Collections team',
     reason: reason,
-    hasPdf: hasPdf
+    hasPdf: hasPdf,
+    confirmed: false  // becomes true when user confirms send
   };
   const newHistory = [...(inv.history || []), histEntry];
   await updateInvoiceData(inv.id, { history: newHistory });
   
+  // After download, ask if she actually clicked Send in Outlook
+  setTimeout(() => askConfirmSend(inv.id, newHistory.length - 1), 600);
+  
   toast(en
-    ? `✉ Internal alert .eml downloaded ${hasPdf ? 'WITH PDF attached' : '(no PDF — invoice has no PDF saved)'}. Double-click to open in Outlook → click Send. (Logged to invoice history)`
-    : `✉ Alerta interna .eml descargada ${hasPdf ? 'CON PDF adjunto' : '(sin PDF — factura no tiene PDF guardado)'}. Doble click para abrir en Outlook → dale Send. (Registrado en historial de la factura)`,
+    ? `✉ Alert .eml downloaded ${hasPdf ? 'with PDF' : '(no PDF)'}. Forward to ${collectionsName || 'team'} in Outlook → click Send.`
+    : `✉ Alerta .eml descargada ${hasPdf ? 'con PDF' : '(sin PDF)'}. Forward a ${collectionsName || 'cobros'} en Outlook → click Send.`,
     'success');
 }
+
+// ════════════════════════════════════════════════════════════
+// CONFIRM SEND — ask user if they actually clicked Send in Outlook
+// Updates the latest history entry to confirmed:true if yes
+// ════════════════════════════════════════════════════════════
+window.askConfirmSend = function(invoiceId, historyIndex) {
+  const inv = allInvoices.find(i => i.id === invoiceId);
+  if (!inv) return;
+  const ev = (inv.history || [])[historyIndex];
+  if (!ev || ev.confirmed) return;
+  
+  const en = currentLang === 'en';
+  const recipient = ev.recipientName || 'recipient';
+  
+  // Modal HTML — reuses simple confirm UI
+  const overlay = document.createElement('div');
+  overlay.id = 'confirmSendOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:white;border-radius:16px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,0.3);">
+      <div style="font-size:36px;text-align:center;margin-bottom:8px;">📤</div>
+      <h3 style="margin:0 0 12px 0;text-align:center;font-size:18px;color:#0F172A;">${en ? 'Did you click Send?' : '¿Le diste click a Send?'}</h3>
+      <p style="margin:0 0 20px 0;text-align:center;font-size:14px;color:#475569;line-height:1.5;">
+        ${en
+          ? `In Outlook, did you actually click <strong>Send</strong> on the email to ${escapeHtml(recipient)}? Verify it appears in <strong>Sent Items</strong>.`
+          : `En Outlook, ¿realmente le diste click a <strong>Send</strong> al correo para ${escapeHtml(recipient)}? Verifica que aparezca en <strong>Sent Items</strong>.`}
+      </p>
+      <div style="display:flex;gap:8px;flex-direction:column;">
+        <button onclick="window.confirmSendYes('${invoiceId}', ${historyIndex})" style="background:#16A34A;color:white;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+          ✅ ${en ? 'Yes, I sent it (mark as sent)' : 'Sí lo envié (marcar como enviado)'}
+        </button>
+        <button onclick="window.confirmSendNo()" style="background:#F1F5F9;color:#475569;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;">
+          ⏰ ${en ? "Not yet — I'll do it later" : 'Aún no — lo hago después'}
+        </button>
+      </div>
+      <p style="font-size:11px;color:#94A3B8;text-align:center;margin:14px 0 0 0;font-style:italic;">
+        ${en ? 'You can confirm later from the payment modal' : 'Puedes confirmar después desde el payment modal'}
+      </p>
+    </div>`;
+  document.body.appendChild(overlay);
+};
+
+window.confirmSendYes = async function(invoiceId, historyIndex) {
+  const inv = allInvoices.find(i => i.id === invoiceId);
+  if (!inv) return;
+  const newHistory = [...(inv.history || [])];
+  if (newHistory[historyIndex]) {
+    newHistory[historyIndex] = { ...newHistory[historyIndex], confirmed: true, confirmedAt: Date.now() };
+    await updateInvoiceData(invoiceId, { history: newHistory });
+  }
+  const overlay = document.getElementById('confirmSendOverlay');
+  if (overlay) overlay.remove();
+  toast(currentLang === 'en'
+    ? '✅ Marked as sent — audit trail updated'
+    : '✅ Marcado como enviado — historial actualizado', 'success');
+};
+
+window.confirmSendNo = function() {
+  const overlay = document.getElementById('confirmSendOverlay');
+  if (overlay) overlay.remove();
+  toast(currentLang === 'en'
+    ? '⏰ Pending — confirm later from payment modal'
+    : '⏰ Pendiente — confirma después desde el payment modal', 'success');
+};
+
+// Confirm send when user clicks the inline button inside the alert history list
+window.confirmSendYesFromHistory = async function(invoiceId, historyIndex) {
+  const inv = allInvoices.find(i => i.id === invoiceId);
+  if (!inv) return;
+  const newHistory = [...(inv.history || [])];
+  if (newHistory[historyIndex]) {
+    newHistory[historyIndex] = { ...newHistory[historyIndex], confirmed: true, confirmedAt: Date.now() };
+    await updateInvoiceData(invoiceId, { history: newHistory });
+    // Re-render the modal contents in place by re-opening
+    setTimeout(() => window.openPaymentModal(invoiceId), 100);
+  }
+  toast(currentLang === 'en' ? '✅ Marked as sent' : '✅ Marcado como enviado', 'success');
+};
 
 // ════════════════════════════════════════════════════════════
 // CHECK TRACKING — notify deposit team about a check that needs depositing
@@ -5429,7 +5586,7 @@ window.notifyDepositTeam = async function() {
   a.click();
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
   
-  // ─── Log to invoice history (audit trail) ───
+  // ─── Log to invoice history (audit trail) — initially as "generated" only ───
   const histEntry = {
     ts: Date.now(),
     action: 'alert_check',
@@ -5438,14 +5595,18 @@ window.notifyDepositTeam = async function() {
     location: checkLocation,
     checkRef: checkRef,
     technician: inv.technician || null,
-    hasPdf: !!pdfBase64
+    hasPdf: !!pdfBase64,
+    confirmed: false
   };
   const newHistory = [...(inv.history || []), histEntry];
   await updateInvoiceData(inv.id, { history: newHistory });
   
+  // After download, ask if she actually clicked Send in Outlook
+  setTimeout(() => askConfirmSend(inv.id, newHistory.length - 1), 600);
+  
   toast(en
-    ? `✉ Check tracking .eml downloaded ${pdfBase64 ? 'WITH PDF attached' : '(no PDF)'}. Open with Outlook → click Send. (Logged to invoice history)`
-    : `✉ .eml de tracking de cheque descargado ${pdfBase64 ? 'CON PDF adjunto' : '(sin PDF)'}. Abre con Outlook → dale Send. (Registrado en historial de la factura)`,
+    ? `✉ Check .eml downloaded ${pdfBase64 ? 'with PDF' : '(no PDF)'}. Forward to ${collectionsName || 'team'} in Outlook → click Send.`
+    : `✉ Cheque .eml descargado ${pdfBase64 ? 'con PDF' : '(sin PDF)'}. Forward a ${collectionsName || 'cobros'} en Outlook → click Send.`,
     'success');
 };
 
@@ -6628,7 +6789,18 @@ function renderInvoiceCardHtml(inv) {
       : when.toLocaleDateString();
     const icon = lastAlert.action === 'alert_check' ? '💵' : '🚨';
     const recipient = escapeHtml(lastAlert.recipientName || 'Cobros');
-    return `<span style="font-size:10px;color:#0F172A;background:#DBEAFE;padding:2px 8px;border-radius:999px;font-weight:600;border:1px solid #93C5FD;" title="${escapeHtml(currentLang === 'en' ? `Alert generated for ${recipient} at ${when.toLocaleString()}. ${alertEvents.length} alert(s) total.` : `Alerta generada para ${recipient} a las ${when.toLocaleString()}. ${alertEvents.length} alerta(s) en total.`)}">${icon} ${currentLang === 'en' ? 'Alerted' : 'Alertado'}: ${recipient} · ${timeStr}${alertEvents.length > 1 ? ` (×${alertEvents.length})` : ''}</span>`;
+    const isConfirmed = lastAlert.confirmed === true;
+    const stateLabel = isConfirmed
+      ? (currentLang === 'en' ? 'Sent' : 'Enviado')
+      : (currentLang === 'en' ? 'Generated' : 'Generado');
+    const stateIcon = isConfirmed ? '✅' : '⏰';
+    const bg = isConfirmed ? '#DCFCE7' : '#FEF3C7';
+    const fg = isConfirmed ? '#15803D' : '#92400E';
+    const border = isConfirmed ? '#86EFAC' : '#FDE047';
+    const tooltip = currentLang === 'en'
+      ? `${stateIcon} ${stateLabel} for ${recipient} at ${when.toLocaleString()}. ${alertEvents.length} alert(s) total. ${isConfirmed ? 'You confirmed Send was clicked.' : 'NOT confirmed sent yet — confirm in payment modal.'}`
+      : `${stateIcon} ${stateLabel} a ${recipient} a las ${when.toLocaleString()}. ${alertEvents.length} alerta(s). ${isConfirmed ? 'Confirmaste que enviaste.' : 'NO confirmado aún — confirma en payment modal.'}`;
+    return `<span style="font-size:10px;color:${fg};background:${bg};padding:2px 8px;border-radius:999px;font-weight:700;border:1px solid ${border};" title="${escapeHtml(tooltip)}">${stateIcon} ${icon} ${recipient} · ${timeStr}${alertEvents.length > 1 ? ` (×${alertEvents.length})` : ''}</span>`;
   })() : '';
   const ccBadge = inv.ccRequested && s !== 'paid' ? `<span style="font-size:10px;color:var(--sent);font-weight:600;" title="${escapeHtml(t('card.ccRequestedTitle'))}">${escapeHtml(t('card.ccRequested'))}</span>` : '';
   const fuLabel = inv.nextFollowUp && s !== 'paid' ? `<span style="color:var(--followup);font-size:11px;">${escapeHtml(t('card.followupOn', inv.nextFollowUp))}</span>` : '';
