@@ -5305,25 +5305,36 @@ const TICKETS_CACHE_MS = 60_000;
 async function fetchAllTicketsRaw() {
   if (_ticketsCache && (Date.now() - _ticketsCacheTs) < TICKETS_CACHE_MS) return _ticketsCache;
   const cfg = getTicketsDbConfig();
-  const url = `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents/${cfg.ticketsCollection || 'tickets'}?pageSize=300&key=${cfg.apiKey}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    if (res.status === 403) throw new Error('TICKETS DB bloquea lectura (reglas Firestore). Revisa reglas o configura otro proyecto en Settings.');
-    if (res.status === 404) throw new Error(`Colección "${cfg.ticketsCollection || 'tickets'}" no existe en ${cfg.projectId}`);
-    throw new Error(`HTTP ${res.status}: ${txt.slice(0, 100)}`);
+  const allTickets = [];
+  let pageToken = '';
+  const MAX_PAGES = 10; // safety cap: up to 10,000 tickets
+  
+  for (let pageNum = 0; pageNum < MAX_PAGES; pageNum++) {
+    let url = `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents/${cfg.ticketsCollection || 'tickets'}?pageSize=1000&key=${cfg.apiKey}`;
+    if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      if (res.status === 403) throw new Error('TICKETS DB bloquea lectura (reglas Firestore). Revisa reglas o configura otro proyecto en Settings.');
+      if (res.status === 404) throw new Error(`Colección "${cfg.ticketsCollection || 'tickets'}" no existe en ${cfg.projectId}`);
+      throw new Error(`HTTP ${res.status}: ${txt.slice(0, 100)}`);
+    }
+    const data = await res.json();
+    const docs = data.documents || [];
+    for (const d of docs) {
+      const fields = d.fields || {};
+      const obj = { _id: d.name.split('/').pop() };
+      for (const [k, v] of Object.entries(fields)) obj[k] = unwrapFirestoreValue(v);
+      allTickets.push(obj);
+    }
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
   }
-  const data = await res.json();
-  const docs = data.documents || [];
-  const tickets = docs.map(d => {
-    const fields = d.fields || {};
-    const obj = { _id: d.name.split('/').pop() };
-    for (const [k, v] of Object.entries(fields)) obj[k] = unwrapFirestoreValue(v);
-    return obj;
-  });
-  _ticketsCache = tickets;
+  
+  console.info(`[TICKETS] Fetched ${allTickets.length} tickets across ${Math.ceil(allTickets.length / 1000)} page(s)`);
+  _ticketsCache = allTickets;
   _ticketsCacheTs = Date.now();
-  return tickets;
+  return allTickets;
 }
 
 // Helper: derive customers from tickets (used as fallback when no customers collection exists)
@@ -5382,7 +5393,7 @@ async function fetchAllTicketsCustomers() {
     return deriveCustomersFromTickets();
   }
   if (_ticketsCustCache && (Date.now() - _ticketsCustCacheTs) < TICKETS_CACHE_MS) return _ticketsCustCache;
-  const url = `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents/${cfg.customersCollection}?pageSize=500&key=${cfg.apiKey}`;
+  const url = `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents/${cfg.customersCollection}?pageSize=1000&key=${cfg.apiKey}`;
   const res = await fetch(url);
   if (!res.ok) {
     // If customers collection doesn't exist, derive from tickets instead
