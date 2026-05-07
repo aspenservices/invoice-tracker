@@ -5394,6 +5394,11 @@ async function fetchAllTicketsCustomers() {
   }
   const data = await res.json();
   const docs = data.documents || [];
+  // Auto-fallback: if customers collection is empty, derive from tickets
+  if (docs.length === 0) {
+    console.info(`Collection "${cfg.customersCollection}" returned 0 documents, deriving customers from tickets`);
+    return deriveCustomersFromTickets();
+  }
   const customers = docs.map(d => {
     const fields = d.fields || {};
     const obj = { _id: d.name.split('/').pop() };
