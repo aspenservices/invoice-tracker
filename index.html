@@ -1571,9 +1571,6 @@ Mahogany Durawood..."></textarea>
             <div class="ps-radio" data-method="cash" data-i18n="payment.method.cash">💵 Efectivo</div>
             <div class="ps-radio" data-method="credit_card" data-i18n="payment.method.cc">💳 Tarjeta</div>
             <div class="ps-radio" data-method="ach" data-i18n="payment.method.ach">🏦 ACH</div>
-            <div class="ps-radio" data-method="zelle" data-i18n="payment.method.zelle">📱 Zelle</div>
-            <div class="ps-radio" data-method="venmo" data-i18n="payment.method.venmo">📱 Venmo</div>
-            <div class="ps-radio" data-method="square" data-i18n="payment.method.square">⬛ Square</div>
             <div class="ps-radio" data-method="other" data-i18n="payment.method.other">❓ Otro</div>
           </div>
           <input type="text" id="psMethodRef" data-i18n-ph="payment.method.ref.ph" placeholder="# de cheque / últimos 4 de CC / referencia (opcional)" style="width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px;">
@@ -1742,8 +1739,8 @@ const I18N = {
     'payment.method.other': '❓ Otro',
     'payment.method.ref.ph': '# de cheque / últimos 4 de CC / referencia (opcional)',
     'payment.reason.label': 'Motivo de no cobro',
-    'payment.reason.cc_needed': '📞 Falta pedir CC',
-    'payment.reason.cc_declined': '❌ CC rechazada',
+    'payment.reason.cc_needed': '📞 Falta CC en archivo',
+    'payment.reason.cc_declined': '❌ CC declinada',
     'payment.reason.no_response': '🔇 Cliente no contesta',
     'payment.reason.partial': '💵 Pago parcial',
     'payment.reason.disputed': '⚠️ En disputa',
@@ -1921,7 +1918,7 @@ const I18N = {
     'payment.method.other': '❓ Other',
     'payment.method.ref.ph': 'Check # / last 4 of CC / reference (optional)',
     'payment.reason.label': 'Reason for no payment',
-    'payment.reason.cc_needed': '📞 CC not requested yet',
+    'payment.reason.cc_needed': '📞 No CC on file',
     'payment.reason.cc_declined': '❌ CC declined',
     'payment.reason.no_response': '🔇 Customer not responding',
     'payment.reason.partial': '💵 Partial payment',
@@ -4983,32 +4980,24 @@ function renderTicketsInDetail(tickets) {
 const NOTIF_KEY = 'aspenInvoiceTracker_lastNotifCheck';
 let _notifInterval = null;
 
-// Register a minimal Service Worker so notifications can show even when tab is backgrounded
+// Register a real Service Worker file for background notifications
+// (GitHub Pages blocks blob: URL service workers, so we need a real file)
+let _swRegistration = null;
 async function registerNotifSW() {
-  if (!('serviceWorker' in navigator)) return;
+  if (!('serviceWorker' in navigator)) {
+    console.warn('[SW] Service Workers not supported in this browser');
+    return null;
+  }
   try {
-    // Inline Service Worker as a Blob URL — no separate file needed
-    const swCode = `
-      self.addEventListener('install', (e) => self.skipWaiting());
-      self.addEventListener('activate', (e) => self.clients.claim());
-      self.addEventListener('notificationclick', (e) => {
-        e.notification.close();
-        e.waitUntil(
-          self.clients.matchAll({ type: 'window' }).then((clientList) => {
-            for (const client of clientList) {
-              if ('focus' in client) return client.focus();
-            }
-            if (self.clients.openWindow) return self.clients.openWindow('/');
-          })
-        );
-      });
-    `;
-    const blob = new Blob([swCode], { type: 'application/javascript' });
-    const swUrl = URL.createObjectURL(blob);
-    await navigator.serviceWorker.register(swUrl);
-    console.info('Notification SW registered');
+    // Use scope=./ so it works at /invoice-tracker/ path on GitHub Pages
+    _swRegistration = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+    console.info('[SW] Registered successfully:', _swRegistration.scope);
+    // Ensure the worker is active before we try to use it
+    await navigator.serviceWorker.ready;
+    return _swRegistration;
   } catch (e) {
-    console.warn('SW register failed:', e);
+    console.error('[SW] Register failed:', e);
+    return null;
   }
 }
 
@@ -5038,38 +5027,58 @@ window.toggleNotifications = async function() {
   const ok = await requestNotifPermission();
   if (!ok) return;
   localStorage.setItem('aspenNotifEnabled', '1');
-  await registerNotifSW();
-  toast(t('toast.notifEnabled'), 'success');
+  // Try to register SW — if it fails, notifs only work with tab focused
+  const reg = await registerNotifSW();
+  if (!reg) {
+    toast(currentLang === 'en'
+      ? '⚠ Notifications enabled, but Service Worker failed. Notifs only work with tab open. Check console.'
+      : '⚠ Notificaciones activadas, pero falló el Service Worker. Solo llegan con pestaña abierta. Revisa consola.', 'error');
+  } else {
+    toast(t('toast.notifEnabled'), 'success');
+  }
   startNotifChecker();
   updateNotifButton();
-  // Force immediate check & test notification
-  showNotif(t('toast.notifTestTitle'), t('toast.notifTestBody'));
-  // Also fire immediately after enabling so user sees today's pending items
-  setTimeout(() => checkAndNotify(true), 1500);
+  // Test notification — fires immediately to verify it works
+  setTimeout(() => {
+    showNotif(t('toast.notifTestTitle'), t('toast.notifTestBody'), 'test-' + Date.now());
+  }, 500);
+  // Then comprehensive check after data loads
+  setTimeout(() => checkAndNotify(true), 2000);
 };
 
 function showNotif(title, body, tag) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  try {
-    // Try via Service Worker first (works when tab not focused)
-    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.ready.then(reg => {
-        reg.showNotification(title, {
-          body,
-          icon: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%230f172a" rx="20"/%3E%3Ctext x="50" y="62" font-size="50" text-anchor="middle" fill="white"%3E📋%3C/text%3E%3C/svg%3E',
-          badge: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Ccircle cx="50" cy="50" r="40" fill="%23D4772C"/%3E%3C/svg%3E',
-          tag: tag || 'invoice-tracker',
-          requireInteraction: false,
-          renotify: true
-        });
-      }).catch(() => fallbackNotif(title, body, tag));
-    } else {
-      fallbackNotif(title, body, tag);
-    }
-  } catch (e) {
-    console.error('Notif error', e);
-    fallbackNotif(title, body, tag);
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    console.warn('[Notif] Not granted');
+    return;
   }
+  const opts = {
+    body,
+    icon: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%230f172a" rx="20"/%3E%3Ctext x="50" y="62" font-size="50" text-anchor="middle" fill="white"%3E📋%3C/text%3E%3C/svg%3E',
+    badge: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Ccircle cx="50" cy="50" r="40" fill="%23D4772C"/%3E%3C/svg%3E',
+    tag: tag || 'invoice-tracker',
+    requireInteraction: false,
+    renotify: true
+  };
+  // Path 1: Use existing SW registration (works in background)
+  if (_swRegistration) {
+    _swRegistration.showNotification(title, opts).then(
+      () => console.info('[Notif] Shown via SW:', title),
+      err => {
+        console.warn('[Notif] SW showNotification failed, falling back:', err);
+        fallbackNotif(title, body, tag);
+      }
+    );
+    return;
+  }
+  // Path 2: Try ready promise (in case _swRegistration not set yet)
+  if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.ready.then(reg => {
+      reg.showNotification(title, opts);
+    }).catch(() => fallbackNotif(title, body, tag));
+    return;
+  }
+  // Path 3: Direct (only works when tab focused)
+  fallbackNotif(title, body, tag);
 }
 
 function fallbackNotif(title, body, tag) {
@@ -5082,7 +5091,8 @@ function fallbackNotif(title, body, tag) {
     });
     n.onclick = () => { window.focus(); n.close(); };
     setTimeout(() => n.close(), 8000);
-  } catch (e) { console.error('Fallback notif failed', e); }
+    console.info('[Notif] Shown via fallback:', title);
+  } catch (e) { console.error('[Notif] Fallback failed:', e); }
 }
 
 function checkAndNotify(force) {
@@ -5669,8 +5679,10 @@ window.toast = toast;
 
 // Restart notif checker if it was previously enabled
 if (localStorage.getItem('aspenNotifEnabled') === '1' && 'Notification' in window && Notification.permission === 'granted') {
-  registerNotifSW();   // Re-register Service Worker for backgrounded notifications
-  startNotifChecker();
+  // Register SW first, then start checker — order matters so background notifs work
+  registerNotifSW().then(() => {
+    startNotifChecker();
+  });
 }
 updateNotifButton();
 </script>
