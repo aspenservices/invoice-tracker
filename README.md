@@ -1,607 +1,514 @@
-# 📋 Aspen Spas — Invoice Tracker
+# Aspen Spas — Invoice Tracker
 
-> **Repo:** `aspenservices/invoice-tracker`
-> **Live:** [aspenservices.github.io/invoice-tracker](https://aspenservices.github.io/invoice-tracker/)
-> **Stack:** HTML + Vanilla JS + Firebase Realtime Database (single-file)
-> **Idiomas / Languages:** 🇪🇸 Español + 🇺🇸 English (toggle en el header)
+> Internal tool for managing post-service invoices, follow-ups, payment tracking, and collections at **Aspen Spas (St. Louis, MO)**.
 
----
+Single-file HTML/JavaScript app deployed via **GitHub Pages**, with **Firebase Realtime Database** as backend and **cross-project Firestore reads** to integrate with the existing TECH-TICKETS app.
 
-## 📑 Índice / Table of contents
-
-- [📋 Aspen Spas — Invoice Tracker](#-aspen-spas--invoice-tracker)
-  - [📑 Índice / Table of contents](#-índice--table-of-contents)
-  - [🚀 Quick Start](#-quick-start)
-  - [🔥 Firebase Configurations](#-firebase-configurations)
-    - [Invoice Tracker (este proyecto / this project)](#invoice-tracker-este-proyecto--this-project)
-    - [TECH-TICKETS database (read-only cross-fetch)](#tech-tickets-database-read-only-cross-fetch)
-    - [Firestore Security Rules — TECH-TICKETS](#firestore-security-rules--tech-tickets)
-    - [Firebase Realtime Database Rules — Invoice Tracker](#firebase-realtime-database-rules--invoice-tracker)
-  - [🗄 Estructura de datos / Data Structure](#-estructura-de-datos--data-structure)
-    - [Invoice schema](#invoice-schema)
-    - [Customer schema](#customer-schema)
-  - [✨ Features](#-features)
-  - [📖 Cómo usar / How to use](#-cómo-usar--how-to-use)
-    - [1. Crear factura nueva / Create new invoice](#1-crear-factura-nueva--create-new-invoice)
-    - [2. Mandar email / Send email](#2-mandar-email--send-email)
-    - [3. Marcar pagada / Mark as paid](#3-marcar-pagada--mark-as-paid)
-    - [4. Vista Hoy / Today view](#4-vista-hoy--today-view)
-    - [5. Aging Report](#5-aging-report)
-    - [6. Cuentas problemáticas / Problem accounts](#6-cuentas-problemáticas--problem-accounts)
-    - [7. Snooze](#7-snooze)
-    - [8. Exportar a QuickBooks / Export to QuickBooks](#8-exportar-a-quickbooks--export-to-quickbooks)
-    - [9. Notificaciones push / Push notifications](#9-notificaciones-push--push-notifications)
-    - [10. Cambiar idioma / Change language](#10-cambiar-idioma--change-language)
-  - [👥 Equipo / Team](#-equipo--team)
-  - [🛠 Deployment](#-deployment)
-  - [🐛 Troubleshooting](#-troubleshooting)
-  - [🗺 Roadmap](#-roadmap)
-  - [📞 Contactos / Contacts](#-contactos--contacts)
+**Live URL:** https://aspenservices.github.io/invoice-tracker/
+**Source:** `index.html` (≈300 KB, ~6,500 lines)
+**Repo:** `aspenservices/invoice-tracker`
 
 ---
 
-## 🚀 Quick Start
+## 📋 Tabla de contenidos
 
-**ES** — Descarga el `index.html`, súbelo al repo `aspenservices/invoice-tracker`, GitHub Pages lo sirve automáticamente. Las credenciales de Firebase ya están hardcodeadas, no necesitas configurar nada en Settings.
-
-**EN** — Download `index.html`, push it to the `aspenservices/invoice-tracker` repo, GitHub Pages serves it automatically. Firebase credentials are already hardcoded — no Settings configuration needed.
-
-```bash
-# Clone & deploy
-git clone https://github.com/aspenservices/invoice-tracker.git
-cd invoice-tracker
-# Reemplaza el index.html con la nueva versión
-cp ~/Downloads/index.html .
-git add index.html
-git commit -m "Update invoice tracker"
-git push
-# Live in ~30 seconds at https://aspenservices.github.io/invoice-tracker/
-```
+1. [Características principales](#-características-principales)
+2. [Stack y arquitectura](#-stack-y-arquitectura)
+3. [Setup inicial](#-setup-inicial-solo-primera-vez)
+4. [Workflow diario](#-workflow-diario)
+5. [Anonymous Auth y seguridad](#-anonymous-auth-y-seguridad)
+6. [Sistema de emails](#-sistema-de-emails)
+7. [Calculadora de garantías](#-calculadora-de-garantías)
+8. [Notificaciones](#-notificaciones)
+9. [Despliegue](#-despliegue)
+10. [Troubleshooting](#-troubleshooting)
+11. [Equipo](#-equipo)
 
 ---
 
-## 🔥 Firebase Configurations
+## 🎯 Características principales
 
-### Invoice Tracker (este proyecto / this project)
+### Vistas y filtros
+- **8 tabs:** Today · All · Pending · To collect · Sent · Paid · Snoozed · Problems · Customers
+- **5 KPI cards:** Pending to send, To collect, Pending CC/Collection, Sent this month, Collected this month
+- **A/R aging report:** 0-7, 8-14, 15-30, +30 días — clickeable para filtrar
+- **Auto-detección de "problemas":** clientes con 2+ historiales de CC declined / no response / disputas
 
-```js
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAG6k-VLWPfYF2xq989j8PUUCySL8MIyLU",
-  authDomain: "invoice-daily-f170e.firebaseapp.com",
-  databaseURL: "https://invoice-daily-f170e-default-rtdb.firebaseio.com",
-  projectId: "invoice-daily-f170e",
-  storageBucket: "invoice-daily-f170e.firebasestorage.app",
-  messagingSenderId: "660377797408",
-  appId: "1:660377797408:web:f90ffe0c821ce09ff20d45",
-  measurementId: "G-WVPTSMFS72"
-};
+### CRUD de facturas
+- Form completo con: número, monto, cliente, email, fecha de servicio, técnico, descripción, modelo, serie, notas, PDF
+- **Importación desde TICKETS database** — auto-completa teléfono, dirección, modelo
+- **Parser de notas QB** — pega el bloque NOTES de QuickBooks y extrae modelo, dirección, serial, board, heater, topside
+
+### Gestión de pagos
+- 6 métodos de pago: Sin pagar · Cheque · Efectivo · Tarjeta · ACH · Otro
+- 5 razones de pendiente: Falta CC · CC declinada · No responde · Pago parcial · En disputa
+- **Snooze:** 3/7/14 días o fecha custom
+- **Follow-ups automáticos** con fecha siguiente
+
+### Búsqueda y exportación
+- **Search global** (cliente, factura, email, serial, modelo)
+- **Export CSV** para QuickBooks (formato Receive Payment)
+- **Sparklines de cliente** (mini-gráficas de comportamiento de pago)
+
+### Bilingüe ES/EN
+- Toggle en el header (botón "ES" / "EN")
+- ~140 traducciones cubriendo casi toda la UI
+
+---
+
+## 🛠 Stack y arquitectura
+
+```
+┌─────────────────────────────────────────────────────┐
+│  index.html (single-file)                           │
+│  ┌──────────────────────────────────────────────┐  │
+│  │  Vanilla JS + inline CSS                      │  │
+│  │  Firebase JS SDK 10.13.0 (modular)            │  │
+│  │  - firebase-app                                │  │
+│  │  - firebase-database (RTDB)                    │  │
+│  │  - firebase-auth (Anonymous)                   │  │
+│  └──────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+            ↓                              ↓
+   ┌────────────────┐         ┌──────────────────────┐
+   │  invoice-daily │         │  tech-tickets-a9485  │
+   │  -f170e        │         │  (read-only cross-   │
+   │  (RTDB primary)│         │   project Firestore) │
+   │                │         │                      │
+   │  /invoices     │         │  /tickets ← derive   │
+   │  /customers    │         │   customers from     │
+   │                │         │   here               │
+   └────────────────┘         └──────────────────────┘
+            ↓                              ↑
+   ┌────────────────┐         ┌──────────────────────┐
+   │  Anonymous Auth│         │  Anonymous Auth      │
+   │  (silent)      │         │  (silent, separate   │
+   │                │         │   Firebase app)      │
+   └────────────────┘         └──────────────────────┘
 ```
 
-- **Firebase Console:** https://console.firebase.google.com/project/invoice-daily-f170e
-- **Tipo:** Realtime Database
-- **Plan:** Spark (free tier)
-- **Paths:**
-  - `/invoiceTracker/invoices/{id}` — todas las facturas
-  - `/invoiceTracker/customers/{id}` — base de clientes locales
+### Datos persistentes
 
-### TECH-TICKETS database (read-only cross-fetch)
+- **Firebase Realtime Database** (`invoice-daily-f170e`)
+  - `/invoiceTracker/invoices/{id}` — facturas
+  - `/invoiceTracker/customers/{id}` — clientes
+- **Cache local en localStorage** (fallback si Firebase falla):
+  - `aspenInvoices`, `aspenCustomers`, `aspenLang`, `aspenSettings`, `aspenNotifEnabled`
 
-```js
-const DEFAULT_TICKETS_DB = {
-  apiKey: "AIzaSyDsmFIRqRrvTqRgzWKLFjA9Sdnro7nz8zc",
-  projectId: "tech-tickets-a9485",
-  ticketsCollection: "tickets",
-  customersCollection: "customers"
-};
+### Service Worker
+- Archivo: `sw.js` (en raíz del repo)
+- Registrado al activar notificaciones
+- Permite que las notifs lleguen aunque la pestaña esté en background
+
+---
+
+## 🚀 Setup inicial (solo primera vez)
+
+> **NOTA:** Todo el config técnico ya está hardcodeado en el código. Como usuaria final solo necesitas el **Setup B**.
+
+### Setup A — Si forkeas el código para otro negocio
+
+1. Clona el repo
+2. Crea un proyecto Firebase nuevo
+3. Habilita **Realtime Database** (modo locked) y **Authentication → Anonymous**
+4. Reemplaza el bloque `FIREBASE_CONFIG` en `index.html`
+5. Despliega en GitHub Pages
+
+### Setup B — Aspen Spas (uso normal)
+
+1. Abre https://aspenservices.github.io/invoice-tracker/
+2. Click ⚙ Settings → llena solo:
+   - 📞 Teléfono de Aspen Spas
+   - 🌐 Sitio web (`aspenspas.com`)
+   - 👤 Nombre del remitente (`Aspen Spas Service`)
+   - 📞 **Email de Celia** (para alertas internas de cobros)
+3. Click **Guardar y recargar**
+
+> Los campos de Firebase y TICKETS están escondidos en "⚙ Configuración avanzada" porque ya están hardcodeados.
+
+---
+
+## 📝 Workflow diario
+
+### A. Nueva factura
+
+1. Click `+ New Invoice` (o `+ Nueva Factura`)
+2. Llena el formulario; si el cliente ya existe, busca su nombre y la app autocompleta
+3. **Opcional:** pega el bloque de notas de QuickBooks → click "⚡ Parsear y autollenar"
+4. Adjunta el PDF (drag & drop o click el área)
+5. Click **Guardar**
+6. La factura aparece en la lista con badge `NOT SENT`
+
+### B. Mandar email al cliente
+
+1. En la lista de facturas, click el botón negro **Send**
+2. Modal de preview → revisa subject y body
+3. Click **Generar y descargar .eml**
+4. Doble click al `.eml` descargado → abre Outlook/Mail.app
+5. ⚠ **CLICK SEND EN OUTLOOK** ← este paso es el que efectivamente manda
+6. La factura cambia de `NOT SENT` a `SENT`
+
+### C. Marcar pago / razón de pendiente
+
+1. Click en la factura → modal de detalle
+2. Sección **"Estado de pago"**:
+   - Si pagó: selecciona método (Check/Cash/CC/ACH/Other) → guarda
+   - Si NO pagó: selecciona razón (Falta CC, CC declinada, No responde, etc.) → guarda
+3. Si seleccionas `❌ CC declinada` o `📞 Falta CC en archivo`:
+   - El sistema te ofrece **mandar alerta interna a Celia**
+   - Confirma → descarga `.eml` con PDF adjunto → abre y manda
+
+### D. Programar follow-up
+
+1. En el detalle de factura → click **Snooze** (📅)
+2. Selecciona 3/7/14 días o fecha custom
+3. La factura se mueve a la pestaña **Snoozed**
+4. Cuando llegue la fecha, te aparece en **Today** y te llega notif
+
+### E. Importar cliente desde TICKETS
+
+1. `+ Agregar cliente` (o edita uno existente)
+2. En el campo "Importar desde TICKETS database" → escribe nombre o apellido
+3. Aparece dropdown con resultados (nombre, teléfono, # de visitas)
+4. Click **Import** → autocompleta teléfono, dirección, modelo
+5. Click **Guardar**
+
+---
+
+## 🔐 Anonymous Auth y seguridad
+
+### El modelo
+
+Tanto el Invoice Tracker como TECH-TICKETS usan **Firebase Anonymous Auth** para autenticarse silenciosamente al cargar la app. El usuario no nota nada — abre el browser y todo funciona.
+
+### Por qué importa
+
+**Antes** (sin auth):
+```
+Reglas: allow read: if true;  ← Cualquiera con la API key podía leer
+                                 nombres, teléfonos, direcciones
 ```
 
-- **Firebase Console:** https://console.firebase.google.com/project/tech-tickets-a9485
-- **Tipo:** Firestore
-- **Apps que usan este DB:**
-  - Mobile PWA (técnicos en campo)
-  - TECH-TICKETS web admin (`aspenservices.github.io/TECH-TICKETS/`)
-- **Cómo se usa desde Invoice Tracker:**
-  - Cross-Firebase fetch via REST API (sin autenticación)
-  - Importa cliente con un click → autoextrae nombre, dirección, teléfono, modelo del spa, serial number, board #, heater #, topside #
-  - Cache de 60 segundos por sesión
+**Después** (con Anonymous Auth):
+```
+Reglas: allow read, write: if request.auth != null;
+                                ← Solo apps que se autentiquen pueden leer
+```
 
-### Firestore Security Rules — TECH-TICKETS
-
-**ES** — Necesarias para que Invoice Tracker pueda leer (sin autenticación):
-**EN** — Required so Invoice Tracker can read (without authentication):
+### Cómo lo implementé
 
 ```javascript
+// Para invoice-daily-f170e (DB principal)
+const app = initializeApp(FIREBASE_CONFIG);
+const auth = getAuth(app);
+await signInAnonymously(auth);  // ← una sola línea
+
+// Para tech-tickets-a9485 (cross-project Firestore reads)
+const ticketsApp = initializeApp(ticketsConfig, 'tickets-auth');
+const ticketsAuth = getAuth(ticketsApp);
+await signInAnonymously(ticketsAuth);
+const token = await ticketsAuth.currentUser.getIdToken();
+fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+```
+
+### Habilitar Anonymous Auth (una sola vez por proyecto)
+
+1. **invoice-daily-f170e:** https://console.firebase.google.com/project/invoice-daily-f170e/authentication/providers
+2. **tech-tickets-a9485:** https://console.firebase.google.com/project/tech-tickets-a9485/authentication/providers
+3. En cada uno: Sign-in method → Anonymous → Enable → Save
+
+### Reglas cerradas (después de verificar que Auth funciona)
+
+**Firestore (`tech-tickets-a9485`):**
+```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /{document=**} {
-      allow read: if true;       // Lectura pública (Invoice Tracker)
-      allow write: if request.auth != null;  // Escritura solo autenticados
+      allow read, write: if request.auth != null;
     }
   }
 }
 ```
 
-### Firebase Realtime Database Rules — Invoice Tracker
-
-> 🚨 **CRÍTICO PARA SINCRONIZACIÓN ENTRE EQUIPOS** — Si las reglas no permiten escritura, cada Mac guarda en su propio localStorage y Alberto/Nela no se ven los datos entre sí.
-
-**Pasos para configurar / Setup steps:**
-
-1. Ve a [Firebase Console → Realtime Database](https://console.firebase.google.com/project/invoice-daily-f170e/database/invoice-daily-f170e-default-rtdb/rules)
-2. Click la pestaña **"Reglas" / "Rules"**
-3. Reemplaza el contenido con esto y click **"Publicar" / "Publish"**:
-
+**Realtime DB (`invoice-daily-f170e`):**
 ```json
 {
   "rules": {
-    "invoiceTracker": {
-      ".read": true,
-      ".write": true
-    }
+    ".read": "auth != null",
+    ".write": "auth != null"
   }
 }
 ```
 
-> ⚠ **Nota de seguridad:** estas reglas son permisivas (cualquiera con la URL puede leer/escribir). Si quieres más seguridad, considera Firebase Auth con Google sign-in restringido a `@aspenspas.com`.
-
-**Cómo verificar que funciona / How to verify:**
-
-- En la app, el header muestra el indicador de conexión (puntito):
-  - 🟢 **Verde + "Sincronizado · Firebase"** = todo OK, datos van a la nube
-  - 🟡 **Amarillo + "Modo local"** = NO sincroniza, configura las reglas
-  - 🔴 **Rojo + "Error"** = hay problema de red o config
-- Si está en amarillo, sale un banner naranja prominente en la parte superior del dashboard pidiendo configurar las reglas.
-
-**Test de sincronización entre Macs:**
-
-1. Mac A: crea una factura nueva
-2. Mac B: recarga la página (`Cmd+R`)
-3. La factura debería aparecer en Mac B en menos de 5 segundos
-
-Si NO aparece → las reglas no están configuradas. Repite los pasos arriba.
-
----
-
-## 🗄 Estructura de datos / Data Structure
-
-### Invoice schema
-
-```typescript
-{
-  id: string,                    // Firebase auto-generated
-  invoiceNumber: string,         // "271231" (de QuickBooks)
-  amount: number,                // 849.76
-  customerName: string,          // "Bellinger, Vince & Cindy"
-  greetingName: string,          // "Vince" (para "Hi Vince,")
-  customerEmail: string,         // "cbellinger@charter.net"
-  serviceDate: string,           // "2026-05-03"
-  technician: string,            // "Jeremy" | "Robert" | "Pedro" | "Jarred" | "Fernando"
-  serviceDescription: string,    // "Service - Flush Platinum"
-  spaModel: string,              // "2014 El Dorado ES"
-  serialNumber: string,          // "13542"
-  notes: string,                 // Notas internas (no se mandan al cliente)
-
-  // Status & timestamps
-  status: "pending" | "sent" | "followup" | "paid",
-  createdAt: number,             // Date.now()
-  sentAt: number | null,
-  paidAt: number | null,
-
-  // Payment tracking
-  paymentReason: "cc_needed" | "cc_declined" | "no_response" | "partial" | "disputed" | null,
-  paymentMethod: "check" | "cash" | "credit_card" | "ach" | "zelle" | "venmo" | "square" | "other" | null,
-  paymentRef: string,            // Check #, last-4 of CC, transaction ID
-  paymentNote: string,           // Free text
-  ccRequested: boolean,          // Si ya se le pidió la tarjeta
-  ccRequestedAt: number | null,
-  nextFollowUp: string,          // "2026-05-13" (YYYY-MM-DD)
-
-  // Snooze
-  snoozedUntil: string | null,   // "2026-05-09" (YYYY-MM-DD)
-
-  // Email tracking
-  lastEmailStage: 1 | 2 | 3,     // 1=primer envío, 2=recordatorio, 3=aviso final
-
-  // Audit trail
-  history: [
-    { ts: number, action: "created" | "sent" | "paid" | "snoozed" | "unsnoozed", stage?: number, until?: string }
-  ],
-
-  // Optional PDF attachment (base64-encoded)
-  pdfBase64: string | null,
-  pdfFilename: string | null,
-  pdfSize: number | null
-}
-```
-
-### Customer schema
-
-```typescript
-{
-  id: string,
-  name: string,                  // "Braver, Todd"
-  greetingName: string,          // "Todd"
-  email: string,                 // "tbraver@wustl.edu"
-  phone: string,                 // "314-497-7910"
-  address: string,               // "4213 Maryland Ave, st. louis 63105"
-  spaModel: string,              // "2010 Pinnacle VS"
-  serialNumber: string,          // "7009"
-  cabinet: string,               // "Chaulkstone"
-  boardNumber: string,
-  heaterNumber: string,
-  topsideNumber: string,
-  qbNotesRaw: string,            // Texto crudo pegado de QuickBooks
-  notes: string                  // Notas internas
-}
-```
-
----
-
-## ✨ Features
-
-| 🇪🇸 Feature | 🇺🇸 Description |
-|------------|----------------|
-| 5 stat cards en vivo | Pending invoices, to collect, CC pending, sent this month, paid this month |
-| 9 pestañas con filtros | Today, All, Pending, To collect, Sent, Paid, Snoozed, Problems, Customers |
-| Banner de alertas inteligente | Notifica: viejas sin enviar, follow-ups que tocan hoy, +7d sin pago, CC sin pedir, +30d críticas, cuentas problemáticas |
-| Aging Report | 4 bandas (0-7 / 8-14 / 15-30 / +30 días) con $ totales clickeables |
-| Vista "Hoy" | Dashboard del día con 4 secciones agrupadas |
-| Cuentas problemáticas | Auto-detecta clientes con 2+ issues de pago históricos |
-| Email por etapas | 3 plantillas (cordial / recordatorio / past due), cambia color del header |
-| Snooze 3/7/14 días | Oculta facturas temporalmente; búsqueda las encuentra siempre |
-| Notificaciones push | Browser notification cuando hay follow-ups vencidos (1× por día) |
-| Import desde TECH-TICKETS | Click → extrae nombre, address, phone, model, serial, board, heater, topside |
-| Parser QB Notes | Pega bloque NOTES de QB y autoextrae todos los campos |
-| PDF upload | Adjunta PDF de la factura, se incluye en el .eml al mandar |
-| .eml file generation | Genera email con PDF adjunto en formato Outlook |
-| QuickBooks CSV export | Exporta pagos en formato Receive Payment de QB |
-| Bilingual UI | Botón EN/ES en header, todo el UI cambia al instante |
-| Cross-Firebase tickets | Lee TECH-TICKETS DB sin auth (REST API) |
-| Smart customer matcher | Match por exact, starts-with, tokens, last name, comma-flipped |
-| PWA-ready | Funciona offline en localStorage, sincroniza cuando hay red |
-
----
-
-## 📖 Cómo usar / How to use
-
-### 1. Crear factura nueva / Create new invoice
-
-**ES:**
-1. Click `+ Nueva Factura` (esquina superior derecha)
-2. Llena los **4 campos requeridos** (al inicio del modal):
-   - Número de factura (ej. `271176`)
-   - Monto (ej. `849.76`)
-   - Cliente (autocompleta desde TICKETS o lista local)
-   - Email del cliente
-3. Opcional: técnico, descripción, modelo, serial, notas internas
-4. Opcional: arrastra el PDF de QuickBooks al área superior — autoextrae los datos
-5. Click `Guardar`
-
-**EN:**
-1. Click `+ New Invoice` (top right)
-2. Fill in the **4 required fields** (at the top of the modal):
-   - Invoice number (e.g. `271176`)
-   - Amount (e.g. `849.76`)
-   - Customer (auto-completes from TICKETS or local list)
-   - Customer email
-3. Optional: technician, description, model, serial, internal notes
-4. Optional: drag the QuickBooks PDF to the upload zone — auto-extracts data
-5. Click `Save`
-
-### 2. Mandar email / Send email
-
-**ES:**
-1. En la card de factura `Pendiente` → click `Mandar`
-2. Aparece el modal de envío con:
-   - Selector de tono (1️⃣ Primer envío / 2️⃣ Recordatorio / 3️⃣ Aviso final) — **se sugiere automáticamente**
-   - Preview del email
-3. Click `📎 Generar email con PDF adjunto` → descarga `.eml`
-4. Doble click al `.eml` → abre Outlook con el email completo (PDF ya adjunto)
-5. Revisa y le das `Send` en Outlook
-6. Vuelve al tracker → click `Marcar como enviada`
-
-**EN:** same flow but in English.
-
-> 💡 **Tip:** la primera vez que abres un `.eml`, si se abre en Apple Mail en lugar de Outlook: Finder → click derecho al `.eml` → `Get Info` → `Open with` → Microsoft Outlook → `Change All`.
-
-### 3. Marcar pagada / Mark as paid
-
-Botón verde `✓ Pagada` en la card de cualquier factura enviada. Confirma. Luego entra al modal `💳` (estado de cobro) y registra el método (cheque, tarjeta, efectivo, etc.) — esto es lo que se exporta a QuickBooks después.
-
-### 4. Vista Hoy / Today view
-
-Pestaña `🌅 Hoy` con 4 secciones agrupadas:
-- 📤 Por enviar (To send)
-- 📅 Follow-ups que tocan hoy (Follow-ups due today)
-- ⏰ Sin cobrar +14 días (Unpaid +14 days)
-- 📞 CC sin pedir (CC not requested)
-
-> Si todo está al día, sale "¡Todo al día! 🎉" / "All caught up! 🎉"
-
-### 5. Aging Report
-
-Card visual debajo del banner de alertas. Muestra cuánto dinero tienes atorado en cada banda de tiempo:
-- **0-7 días** (verde)
-- **8-14 días** (amarillo)
-- **15-30 días** (naranja)
-- **+30 días** (rojo)
-
-Click en cualquier banda → filtra la lista a esas facturas. **Crítico para reportar a Tom y Sam semanalmente.**
-
-### 6. Cuentas problemáticas / Problem accounts
-
-Pestaña `🚨 Problemas`. Auto-detecta clientes con:
-- 2+ facturas con CC declined
-- 2+ facturas sin respuesta
-- Disputa
-- +30 días sin pagar
-
-Útil para saber a quién pedirle CC al frente la próxima vez.
-
-### 7. Snooze
-
-Botón `💤` en cualquier factura no-pagada → menú con:
-- 💤 3 días
-- 💤 7 días
-- 💤 14 días
-- 📅 Hasta fecha…
-
-**Mientras está snoozeada:**
-- ❌ No aparece en pestañas Todas/Pendientes/Por cobrar/Hoy
-- ✅ Sí aparece en pestaña `💤 Snoozeadas`
-- ✅ Sí aparece cuando buscas por nombre o número (siempre se puede encontrar)
-
-Vence automáticamente en la fecha. Botón `⏰` quita el snooze antes de tiempo.
-
-### 8. Exportar a QuickBooks / Export to QuickBooks
-
-Click `📤 Exportar a QB` (al lado del Export CSV). Genera CSV con formato compatible con QuickBooks Receive Payment:
-
-```
-Customer | Invoice # | Amount | Date | Payment Method | Reference No | Memo
-```
-
-**En QuickBooks Desktop:**
-1. File → Utilities → Import → Excel Files
-2. Advanced Import → Receive Payments
-3. Map columns (la primera vez)
-4. Import
-
-**Solo exporta facturas que tengan `paymentMethod` registrado.** Si solo marcaste como Pagada sin método, no las incluye — eso es bueno porque te obliga a llenar el dato antes de exportar.
-
-### 9. Notificaciones push / Push notifications
-
-Click `🔕` en el header → pide permiso al navegador → activa.
-
-Te alerta (1× por día calendario) cuando hay:
-- Follow-ups pendientes hoy
-- Facturas creadas +24h sin enviar
-- CC sin pedir
-
-> ⚠ Solo funciona si el navegador está abierto. No es un servicio remoto.
-
-### 10. Cambiar idioma / Change language
-
-Click el botón **`EN`** o **`ES`** en el header (al lado del 🔕). Cambia todo el UI al instante. La preferencia se guarda en localStorage.
-
----
-
-## 👥 Equipo / Team
-
-| Persona | Rol | Email |
-|---------|-----|-------|
-| Alberto | Service Manager | service1@aspenspas.com (557-233-7119) |
-| Tom & Sam | Co-owners | — |
-| Nela | Service Administrator | — |
-| Celia | Customer Service / Delivery | — |
-| Jeremy, Robert, Pedro, Jarred, Fernando | Service Technicians | — |
-| Gabriel | Chemical Maintenance | — |
-| Dan | Warehouse | — |
-
----
-
-## 🛠 Deployment
-
-### 🚀 Setup completo desde terminal (RECOMENDADO)
-
-**ES** — En lugar de ir a Firebase Console en el navegador, configura las reglas directamente desde terminal con un solo comando:
-
-**EN** — Instead of going to Firebase Console in the browser, configure the rules directly from terminal with one command:
+### Despliegue de reglas
 
 ```bash
-# 1. Clona el repo (primera vez)
-cd ~/Documents
-git clone https://github.com/aspenservices/invoice-tracker.git
-cd invoice-tracker
+# Firestore (TICKETS)
+firebase deploy --only firestore:rules --project tech-tickets-a9485
 
-# 2. Coloca los archivos de Firebase config (los que vienen en el ZIP):
-#    - database.rules.json
-#    - firebase.json
-#    - .firebaserc
-#    - setup-firebase.sh
-#    - firestore.rules
-#    - setup-tickets-rules.sh
-
-# 3. Ejecuta el setup script (la primera vez te pide login con Google)
-./setup-firebase.sh
-
-# Eso es todo. El script:
-# • Verifica que tengas firebase-tools (lo instala si no)
-# • Verifica que estés logueado (te abre el navegador si no)
-# • Verifica acceso al proyecto invoice-daily-f170e
-# • Te muestra las reglas y te pide confirmación
-# • Las deploya a Firebase
+# Realtime DB (Invoice Tracker)
+firebase deploy --only database --project invoice-daily-f170e
 ```
 
-### 🔌 Reglas de TECH-TICKETS Firestore (para que Invoice Tracker lea clientes)
+---
 
-```bash
-./setup-tickets-rules.sh
-# Aplica reglas a tech-tickets-a9485 que permiten lectura pública
+## 📨 Sistema de emails
+
+### Dos flujos distintos
+
+| Flujo | Destinatario | Formato | PDF | Cómo se manda |
+|-------|--------------|---------|-----|---------------|
+| **Customer email** | Cliente externo | HTML bonito (3 stages) | ✅ Adjunto | `.eml` → Outlook → Send |
+| **Internal alert** | Celia / Cobros | HTML bonito + tabla | ✅ Adjunto | `.eml` → Outlook → Send |
+
+### ⚠ IMPORTANTE — Por qué los `.eml` a veces NO se mandan
+
+El `.eml` es solo un **archivo con el contenido del email**. Para que se envíe necesitas:
+1. Doble click al archivo
+2. Que **Outlook** (no Apple Mail) sea el default
+3. Outlook abre el email como **borrador editable**
+4. Click **Send**
+
+Si tu Mac abre `.eml` con Apple Mail, **solo se previsualiza** — no se manda.
+
+### Configurar Outlook como default para `.eml`
+
+1. En Finder, busca cualquier `.eml`
+2. Click derecho → **Get Info**
+3. "Open with:" → escoge **Microsoft Outlook**
+4. Click **"Change All..."**
+5. Confirma
+
+### Verificar que SÍ se mandó un email
+
+```
+1. Apple Mail / Outlook → carpeta SENT (Enviados)
+2. Busca por nombre del cliente o # de factura
+3. Si está ahí → se mandó ✅
+4. Si no → solo se abrió el .eml, no llegó ❌
 ```
 
-### 📤 Deploy del index.html (GitHub Pages)
+### El "From" del email
+
+El `.eml` tiene `From: service1@aspenspas.com` pero **el remitente real depende de la cuenta configurada en Mail/Outlook**. Para mandar desde `service1@aspenspas.com`:
+
+1. Mail.app → Settings → Accounts → "+" → Other Mail Account
+2. Configura la cuenta `service1@aspenspas.com` con servidor SMTP
+3. Settings → Composing → "Send new messages from" → selecciona la cuenta
+
+---
+
+## 🛡 Calculadora de garantías
+
+### Reglas implementadas
+
+**VS Series:**
+- Año 1: Mano de obra GRATIS
+- Años 1-3: Partes GRATIS
+- Año 4-5: Trip charge ($95) + 50% MSRP
+
+**GS Series:**
+- Año 1: Mano de obra GRATIS
+- Años 2-5: Trip charge ($95)
+- Años 1-3: Partes GRATIS
+- Años 4-5: Partes 50% MSRP
+
+**ES Series:**
+- Años 1-5: 100% GRATIS
+
+**Items con garantía limitada (1 año):** estéreo, lifts, cubiertas, ozono, salt cell, lights, waterfall, pump seals
+**Items con garantía limitada (3 meses):** pillows
+**Cutoff duro:** 2019 — spas anteriores no tienen garantía
+
+### Cómo usar
+
+1. En el form de factura → click **🛡 Garantía**
+2. Llena: modelo, año, item afectado
+3. La calculadora te dice:
+   - 🟢 COVERED (todo gratis)
+   - 🟡 PARTIAL (parcial — explicación)
+   - 🔴 OUT_OF_WARRANTY (cobrar todo)
+4. Click **Aplicar nota a factura** → la nota se pega en el campo notes
+
+---
+
+## 🔔 Notificaciones
+
+### Click en el botón 🔔 → abre el panel de salud
+
+| Sección | Qué muestra |
+|---------|-------------|
+| Estado maestro | ON/OFF con un toggle |
+| Health checks | ✅/❌ browser support, permisos, Service Worker |
+| Próximos pendientes | 7 días siguientes con prioridades |
+| Botones | Test ahora · Resumen del día · Re-registrar SW |
+| Disclaimer | Honesto sobre cuándo NO funcionan |
+
+### Cuándo funcionan / cuándo no
+
+✅ **SÍ funcionan cuando:**
+- La pestaña está abierta (cualquier pestaña, aunque sea background)
+- El Service Worker está registrado
+- El navegador no está completamente cerrado
+
+❌ **NO funcionan cuando:**
+- Cerraste TODAS las pestañas del browser
+- Apagaste la Mac
+- El usuario rechazó permisos
+
+**Recomendación:** deja una pestaña pinneada con el tracker abierta todo el día.
+
+---
+
+## 🚀 Despliegue
+
+### Workflow normal
 
 ```bash
 cd ~/Documents/invoice-tracker
-cp ~/Downloads/index.html .   # reemplaza con la nueva versión
+cp ~/Downloads/index.html .   # si te llegó un nuevo index
 git add index.html
-git commit -m "Updated tracker — feature X"
+git commit -m "Descripción del cambio"
 git push origin main
-# GitHub Pages despliega automáticamente en ~30 segundos
-# Live en https://aspenservices.github.io/invoice-tracker/
+# Espera 30 segundos → GitHub Pages publica
+# Recarga la app: Cmd+Shift+R
 ```
 
-### 🔄 Deploy combinado (todo en uno)
+### Si hay merge conflicts
 
 ```bash
-cd ~/Documents/invoice-tracker
-
-# Actualiza el código
-cp ~/Downloads/index.html .
-cp ~/Downloads/README.md .
-git add . && git commit -m "Update + Firebase rules" && git push
-
-# Aplica reglas de Firebase
-./setup-firebase.sh
+git pull origin main --no-rebase --strategy-option=ours
+git push
 ```
 
-### ⚙ Manual (sin scripts) — paso a paso
-
-Si prefieres hacer cada paso manualmente:
+### Deployar reglas de Firebase
 
 ```bash
-# Instalar firebase-tools (una sola vez en tu Mac)
-npm install -g firebase-tools
-
-# Login con Google (una sola vez)
-firebase login
-
-# Inicializar el proyecto en una carpeta
-cd ~/Documents/invoice-tracker
-firebase use --add invoice-daily-f170e
-
-# Deploy reglas de Realtime Database
-firebase deploy --only database
-
-# Deploy reglas de Firestore (en otra carpeta para el proyecto tech-tickets-a9485)
-firebase use --add tech-tickets-a9485
-firebase deploy --only firestore:rules
+# Solo cuando hay cambios en database.rules.json o firestore.rules
+firebase deploy --only database --project invoice-daily-f170e
+firebase deploy --only firestore:rules --project tech-tickets-a9485
 ```
-
-> 💡 Nela ya usa este mismo workflow para deployar el dashboard de payroll: `cd ~/Documents/aspen-spas-payroll && firebase deploy`. Es exactamente el mismo patrón.
 
 ---
 
 ## 🐛 Troubleshooting
 
-### 🚨 "No puedo guardar la factura" / "Can't save invoice"
+### "Synced · Local" en lugar de "Synced · Firebase"
 
-**Causa raíz:** Antes el `await` que escribe a Firebase no tenía try/catch — si Firebase rechazaba el write (por reglas, sin permisos, sin red), el error se tragaba silenciosamente y el botón "Guardar" parecía no hacer nada.
+→ Firebase no se conectó. Posibles razones:
+- Anonymous Auth no habilitado → ve a Firebase Console → Authentication → habilita Anonymous
+- Reglas demasiado restrictivas → temporalmente afloja a `if true` para test
+- API key incorrecta en `index.html`
 
-**Fix aplicado:**
-- ✅ Try/catch alrededor del save
-- ✅ Mensaje de error visible **dentro del modal** (no se puede pasar por alto)
-- ✅ Auto-fallback a localStorage si Firebase falla — los datos NO se pierden
-- ✅ Detección específica de `PERMISSION_DENIED` con instrucciones para fixear
+### "TICKETS DB bloquea lectura (HTTP 403)"
 
-**Si todavía no guarda, revisa:**
-1. ¿Llenaste los 4 campos con `*` rojo? (Número de factura, Monto, Cliente, Email — al inicio del modal)
-2. ¿El email tiene formato válido (con `@` y dominio)?
-3. ¿Aparece un mensaje rojo dentro del modal junto al botón Cancelar? Léelo — te dice qué falló.
-4. Abre la consola del navegador (F12 → Console) — los errores reales aparecen ahí.
+→ Las reglas de Firestore en `tech-tickets-a9485` están bloqueando.
+**Fix temporal:** ve a Firestore Console → Rules → cambia a `allow read: if true` → Publish.
+**Fix permanente:** asegúrate de que Anonymous Auth esté habilitado en `tech-tickets-a9485` Y que las reglas usen `request.auth != null`.
 
-### 🚨 "Datos no sincronizan entre Mac de Alberto y Mac de Nela" / "Data not syncing between Macs"
+### "Customers HTTP 403" en consola al editar cliente
 
-**Causa raíz:** Las reglas de Firebase Realtime Database por default **no permiten escritura** sin autenticación. Cuando una Mac no puede escribir, automáticamente guardaba en localStorage propio sin avisar.
+→ Mismo problema arriba. La app no pudo autenticarse al cross-project Firestore.
 
-**Fix aplicado:**
-- ✅ Banner naranja prominente en el dashboard cuando estás en "Modo local"
-- ✅ El indicador de conexión (puntito en el header) ahora es muy visible: verde = nube, amarillo = local, rojo = error
-- ✅ Botón "Open Settings" / "Recargar" en el banner para acción rápida
+### `.eml` se abre pero no se manda
 
-**Para que sincronice correctamente:**
-1. Configura las reglas de Firebase Realtime Database (ver [sección anterior](#firebase-realtime-database-rules--invoice-tracker))
-2. Recarga la app — el indicador debe ponerse 🟢 verde
-3. Haz un test: crea factura en Mac A → recarga Mac B → debe aparecer
+→ Tu Mac abre `.eml` con Apple Mail (que solo previsualiza, no manda).
+**Fix:** click derecho a un `.eml` → Get Info → Open with → **Microsoft Outlook** → Change All.
 
-### 🚨 "Notificaciones no llegan" / "Notifications don't arrive"
+### Email muestra `From: service1.aspenspas@icloud.com` en lugar de `@aspenspas.com`
 
-**Causa raíz:** Antes solo se disparaban via `new Notification()` directo, que requiere pestaña en foco y no tiene Service Worker.
+→ Mail.app está mandando desde tu cuenta default (iCloud). Configura `service1@aspenspas.com` como cuenta en Mail y ponla como default.
 
-**Fix aplicado:**
-- ✅ Service Worker registrado automáticamente (inline, sin archivo separado)
-- ✅ Notificaciones llegan incluso con la pestaña backgrounded
-- ✅ Al activar las notificaciones, dispara una notif de TEST inmediato — sabes al instante si funcionan
-- ✅ Al cargar la app, verifica TODOS los pendientes (follow-ups + sin enviar +24h + CC sin pedir + facturas críticas +30d) en una sola notif resumen
-- ✅ Re-checa cada 15 min (antes era 30)
-- ✅ Click en la notif te lleva al dashboard
+### Service Worker no se registra
 
-**Para activar notificaciones:**
-1. Click el botón 🔕 en el header
-2. Permite cuando Chrome pida permiso
-3. Llega una notificación de prueba al instante — si la ves, funciona ✅
-4. Si no llega:
-   - Revisa Chrome → ⚙️ Settings → Privacy → Site Settings → Notifications
-   - Confirma que `aspenservices.github.io` esté en "Allow"
-   - macOS: System Settings → Notifications → Chrome → "Allow notifications"
+→ Tu navegador no soporta o blockea SWs. Solución:
+1. Click el botón 🔔 → ve el "Health check"
+2. Si SW dice ❌ → click **Re-registrar SW**
+3. Si sigue fallando, las notifs solo te llegarán con la pestaña activa (sin background)
 
-**Limitación honesta:** las notificaciones SOLO disparan cuando abras la app. No son notificaciones push reales (que requerirían Firebase Cloud Messaging y backend dedicado). Pero al abrir el dashboard cada mañana, te llega un resumen de todo lo pendiente del día.
+### "Notificaciones activas pero no llegan"
 
-### Otros problemas
+→ El sistema operativo está bloqueando las notifs del navegador.
+- macOS: System Settings → Notifications → busca Chrome/Safari → Allow
 
-| 🇪🇸 Síntoma | 🇺🇸 Symptom | Solución / Solution |
-|-----------|-----------|---------------------|
-| Banner amarillo "Modo local" | "Local mode" yellow banner | Configura las reglas de Firebase RTDB (ver arriba) y recarga |
-| Import desde TICKETS solo trae el nombre | Import only fetches name | Reglas de Firestore bloquean lectura — ver [Firestore Security Rules](#firestore-security-rules--tech-tickets) |
-| Email se abre en Apple Mail en lugar de Outlook | Email opens in Apple Mail | Finder → click derecho al `.eml` → Get Info → Open with → Microsoft Outlook → Change All |
-| Botón EN/ES no cambia el modal de Settings | Lang button doesn't translate Settings | Settings modal todavía no traducido — pendiente en roadmap |
-| El PDF no se autoextrae | PDF extraction fails | Algunos PDFs tienen formatos custom — escribe los datos a mano y reporta el PDF para mejorar el parser |
+### Push rechazado al hacer git push
+
+→ Alguien más empujó cambios. Trae los cambios primero:
+```bash
+git pull origin main --no-rebase --strategy-option=ours
+git push
+```
+
+### "MERGE_HEAD exists" o vim abrió un editor raro
+
+→ Hay un merge sin terminar. Aborta:
+```bash
+git merge --abort
+rm -f .git/.MERGE_MSG.swp
+```
+Y vuelve a intentar.
 
 ---
 
-## 🗺 Roadmap
+## 👥 Equipo
 
-### ✅ Done
-- [x] Invoice CRUD con Firebase
-- [x] PDF upload + OCR para autoextraer datos
-- [x] Email .eml con PDF adjunto
-- [x] Cross-Firebase fetch a TECH-TICKETS
-- [x] QB Notes parser
-- [x] Customer database con autocomplete
-- [x] Payment status tracking (CC declined, no response, etc.)
-- [x] Aging report
-- [x] Today view
-- [x] Problem accounts detection
-- [x] Email stage templates (1/2/3)
-- [x] Snooze (3/7/14 días + custom)
-- [x] Browser push notifications
-- [x] QuickBooks CSV export
-- [x] Bilingual UI (ES/EN)
-- [x] Hardcoded Firebase config
-
-### 🚧 To do (próximas mejoras)
-- [ ] Stripe / Square payment links en email
-- [ ] Modo oscuro (Nela lo pidió)
-- [ ] Sync con Google Calendar (follow-ups como eventos)
-- [ ] Métricas por técnico (cuánto facturó / cobró cada uno)
-- [ ] Foto del cheque al marcar pagada (audit trail)
-- [ ] WhatsApp link además del email
-- [ ] Customer modal totalmente bilingüe
-- [ ] Settings modal totalmente bilingüe
-- [ ] PWA service worker (true offline)
-- [ ] Firebase Auth con Google sign-in (restringir a @aspenspas.com)
+| Persona | Rol | Email | Acceso |
+|---------|-----|-------|--------|
+| **Tom y Sam** | Co-owners | (privado) | Admins de Firebase |
+| **Alberto** | Service Manager | service1@aspenspas.com | Admin de TECH-TICKETS, edita el código |
+| **Nela** | Service Administrator / Project Manager | nela.berling@gmail.com | Edita el código, gestiona payroll dashboard |
+| **Celia** | Customer Service / Delivery / Cobros | (configurar en Settings) | Recibe alertas internas de CC declinada |
+| **Jeremy** | Service Technician | — | Trabajo en campo |
+| **Robert** | Service Technician | — | Trabajo en campo |
+| **Pedro** | Service Technician | — | Trabajo en campo |
+| **Jarred** | Service Technician | — | Trabajo en campo |
+| **Fernando** | Service Technician | — | Trabajo en campo |
+| **Fabian** | Service Technician | — | Trabajo en campo |
+| **Gabriel** | Chemicals | — | Ruta química |
+| **Dan** | Warehouse | — | Almacén |
+| **SV** | Warehouse | — | Almacén |
 
 ---
 
-## 📞 Contactos / Contacts
+## 📁 Archivos del repo
 
-- **Service Manager:** Alberto — service1@aspenspas.com — 557-233-7119
-- **Owners:** Tom & Sam (Aspen Spas, St. Louis MO)
-- **Repo issues:** https://github.com/aspenservices/invoice-tracker/issues
+```
+invoice-tracker/
+├── index.html              ← La app completa (single-file)
+├── sw.js                   ← Service Worker para notificaciones
+├── firebase.json           ← Config para deploy de reglas
+├── .firebaserc             ← Apunta a invoice-daily-f170e
+├── database.rules.json     ← Reglas de Realtime DB
+├── firestore.rules         ← Reglas de Firestore (para tech-tickets)
+├── README.md               ← Este archivo
+└── (assets/icons opcionales)
+```
 
 ---
 
-> 🌿 Aspen Spas — St. Louis, Missouri
-> _Built with Claude · Single-file HTML · Firebase Realtime DB_
+## 🆘 Si algo se rompe completamente
+
+**Plan de recuperación:**
+1. Los datos están en Firebase Realtime DB → no se pierden por bugs en frontend
+2. Hay backup automático en localStorage (últimos datos vistos)
+3. Si la app no carga, abre la URL con `?nocache=1` para forzar refresh
+4. Si Firebase está caído (raro), la app cae a modo localStorage automáticamente
+5. Si cambiaste algo y se rompió, `git revert HEAD && git push` para regresar
+
+**Contacto de emergencia:** Si nada de lo anterior funciona, escribe a Anthropic (Claude) con la descripción del error y screenshots — te ayudamos a debuggear.
+
+---
+
+## 📜 Historial de cambios mayores
+
+- **2026-05-07** — Anonymous Auth, PDF en alertas internas, paginación de TICKETS, Settings limpiado
+- **2026-05-06** — Service Worker, panel de salud de notifs, calculadora de garantías, email de cobros, bilingüe completo
+- **2026-05-05** — Cross-database con TECH-TICKETS, Customer detail modal, parser de QB notes
+- **2026-05-04** — Aging report, problemas auto-detect, snooze, email stages
+- **2026-05-03** — Setup inicial, Firebase RTDB, GitHub Pages
+
+---
+
+**Hecho con ☕ por el equipo de Aspen Spas + Claude (Anthropic)**
+*"Para no olvidar ninguna factura, ningún follow-up, ningún cliente."*
