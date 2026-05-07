@@ -1713,6 +1713,7 @@ Mahogany Durawood..."></textarea>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js';
 import { getDatabase, ref, onValue, push, set, remove, update, child, get } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js';
 
 // ════════════════════════════════════════════════════════════
 // CONFIGURACIÓN — Se guarda en localStorage. Edítala desde el botón ⚙ del header
@@ -2186,7 +2187,7 @@ const isConfigSet = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith
 // ════════════════════════════════════════════════════════════
 // INICIALIZACIÓN
 // ════════════════════════════════════════════════════════════
-function initFirebase() {
+async function initFirebase() {
   if (!isConfigSet) {
     console.warn('Firebase no configurado, usando localStorage');
     document.getElementById('setupBanner').style.display = 'flex';
@@ -2198,6 +2199,29 @@ function initFirebase() {
   try {
     const app = initializeApp(FIREBASE_CONFIG);
     db = getDatabase(app);
+    const auth = getAuth(app);
+    setConnectionStatus('connecting', currentLang === 'en' ? 'Authenticating…' : 'Autenticando…');
+    
+    // Sign in anonymously — gives us a stable auth UID for Firestore/Realtime DB rules
+    // Each browser/device gets its own anonymous user; same UID persists across reloads
+    try {
+      await signInAnonymously(auth);
+      console.info('[Auth] Signed in anonymously, UID:', auth.currentUser?.uid);
+    } catch (authErr) {
+      console.error('[Auth] Anonymous sign-in failed:', authErr);
+      // Common reason: Anonymous auth not enabled in Firebase Console
+      if (authErr.code === 'auth/admin-restricted-operation' || authErr.code === 'auth/operation-not-allowed') {
+        setConnectionStatus('error', currentLang === 'en'
+          ? '⚠ Anonymous auth not enabled — enable in Firebase Console'
+          : '⚠ Anonymous auth no habilitado — actívalo en Firebase Console');
+        toast(currentLang === 'en'
+          ? '⚠ Enable Anonymous sign-in in Firebase Console → Authentication → Sign-in method'
+          : '⚠ Activa Anonymous sign-in en Firebase Console → Authentication → Sign-in method',
+          'error');
+      }
+      // Fall through anyway — if rules still allow public, will work; if not, will error on read
+    }
+    
     setConnectionStatus('connecting', currentLang === 'en' ? 'Connecting to Firebase…' : 'Conectando a Firebase…');
     
     const invRef = ref(db, 'invoiceTracker/invoices');
@@ -4943,8 +4967,32 @@ function generateCollectionsEml(inv, reason) {
   
   const sentDate = inv.sentAt ? new Date(inv.sentAt).toLocaleDateString() : '—';
   
-  const bodyHtml = `
-<!DOCTYPE html><html><body style="font-family:-apple-system,Segoe UI,Helvetica,sans-serif;color:#0f172a;max-width:560px;margin:0 auto;">
+  // Plain-text version (fallback for email clients that don't render HTML)
+  const plainTextLines = [
+    fields.greet,
+    '',
+    fields.body,
+    '',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    `${fields.issue}: ${reasonLabel}`,
+    `${fields.invNum}: ${inv.invoiceNumber}`,
+    `${fields.cust}: ${inv.customerName}`,
+    `${fields.amt}: ${fmtCurrency(inv.amount)}`,
+    `${fields.email}: ${inv.customerEmail || '—'}`,
+    customer && customer.phone ? `${fields.phone}: ${customer.phone}` : null,
+    inv.spaModel ? `${fields.model}: ${inv.spaModel}` : null,
+    `${fields.sent}: ${sentDate}`,
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    '',
+    `>>> ${fields.action}`,
+    '',
+    fields.note,
+    fields.sig
+  ].filter(Boolean);
+  const plainText = plainTextLines.join('\n');
+  
+  // Pretty HTML version (red header, table, callout)
+  const htmlBody = `<!DOCTYPE html><html><body style="font-family:-apple-system,Segoe UI,Helvetica,sans-serif;color:#0f172a;max-width:560px;margin:0 auto;">
   <div style="background:#7f1d1d;color:white;padding:20px;border-radius:8px 8px 0 0;">
     <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;opacity:0.8;">${en ? 'INTERNAL ALERT' : 'ALERTA INTERNA'}</div>
     <div style="font-size:18px;font-weight:700;margin-top:4px;">${reasonLabel}</div>
@@ -4952,7 +5000,6 @@ function generateCollectionsEml(inv, reason) {
   <div style="padding:24px;background:white;border:1px solid #e5e7eb;border-top:0;border-radius:0 0 8px 8px;">
     <p style="margin:0 0 14px 0;font-size:14px;">${escapeHtml(fields.greet)}</p>
     <p style="margin:0 0 14px 0;font-size:14px;line-height:1.5;">${escapeHtml(fields.body)}</p>
-    
     <table style="width:100%;border-collapse:collapse;font-size:13px;margin:12px 0;">
       <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;width:40%;">${escapeHtml(fields.issue)}</td><td style="padding:6px 8px;background:#fef2f2;color:#991b1b;font-weight:700;">${reasonLabel}</td></tr>
       <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${escapeHtml(fields.invNum)}</td><td style="padding:6px 8px;font-family:monospace;">${escapeHtml(inv.invoiceNumber)}</td></tr>
@@ -4963,64 +5010,85 @@ function generateCollectionsEml(inv, reason) {
       ${inv.spaModel ? `<tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${escapeHtml(fields.model)}</td><td style="padding:6px 8px;">${escapeHtml(inv.spaModel)}</td></tr>` : ''}
       <tr><td style="padding:6px 8px;background:#f8fafc;font-weight:600;">${escapeHtml(fields.sent)}</td><td style="padding:6px 8px;">${escapeHtml(sentDate)}</td></tr>
     </table>
-    
     <div style="background:#fef3c7;border-left:3px solid #f59e0b;padding:12px 14px;border-radius:4px;margin-top:14px;font-size:13px;color:#78350f;">
       <strong>${escapeHtml(fields.action)}</strong>
     </div>
-    
+    ${inv.pdfBase64 ? `<div style="font-size:12px;color:#475569;margin-top:14px;background:#f1f5f9;padding:10px 12px;border-radius:4px;">📎 ${en ? 'Invoice PDF is attached to this email for reference.' : 'PDF de la factura adjunto para tu referencia.'}</div>` : ''}
     <p style="font-size:11px;color:#94a3b8;margin-top:18px;font-style:italic;">${escapeHtml(fields.note)}</p>
     <p style="font-size:13px;color:#475569;margin-top:6px;">${escapeHtml(fields.sig)}</p>
   </div>
 </body></html>`.trim();
   
-  // Plain-text fallback
-  const bodyTxt = [
-    fields.greet,
-    '',
-    fields.body,
-    '',
-    `${fields.issue}: ${reasonLabel}`,
-    `${fields.invNum}: ${inv.invoiceNumber}`,
-    `${fields.cust}: ${inv.customerName}`,
-    `${fields.amt}: ${fmtCurrency(inv.amount)}`,
-    `${fields.email}: ${inv.customerEmail || '—'}`,
-    customer && customer.phone ? `${fields.phone}: ${customer.phone}` : null,
-    inv.spaModel ? `${fields.model}: ${inv.spaModel}` : null,
-    `${fields.sent}: ${sentDate}`,
-    '',
-    `>>> ${fields.action}`,
-    '',
-    fields.note,
-    fields.sig
-  ].filter(Boolean).join('\n');
+  // Build .eml file with PDF attached (same MIME structure as customer email)
+  const pdfBase64 = inv.pdfBase64 || '';
+  const pdfFilename = inv.pdfFilename || `Invoice_${inv.invoiceNumber}.pdf`;
+  const boundary = '====aspen_internal_' + Math.random().toString(36).slice(2, 12) + '====';
+  const altBoundary = '====alt_internal_' + Math.random().toString(36).slice(2, 12) + '====';
+  const wrappedB64 = pdfBase64 ? pdfBase64.match(/.{1,76}/g).join('\r\n') : '';
   
-  // Build .eml file
-  const boundary = '----=_Part_AspenInternal_' + Date.now();
   const emlLines = [
     `From: "${savedSettings.fromName || 'Aspen Spas Invoice Tracker'}" <noreply@aspenspas.com>`,
     `To: "${collectionsName || 'Collections'}" <${collectionsEmail}>`,
     `Subject: ${subject}`,
     `Date: ${new Date().toUTCString()}`,
     `MIME-Version: 1.0`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    ``,
-    `--${boundary}`,
-    `Content-Type: text/plain; charset=UTF-8`,
-    `Content-Transfer-Encoding: 8bit`,
-    ``,
-    bodyTxt,
-    ``,
-    `--${boundary}`,
-    `Content-Type: text/html; charset=UTF-8`,
-    `Content-Transfer-Encoding: 8bit`,
-    ``,
-    bodyHtml,
-    ``,
-    `--${boundary}--`
+    pdfBase64 
+      ? `Content-Type: multipart/mixed; boundary="${boundary}"`
+      : `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+    ``
   ];
-  const emlBody = emlLines.join('\r\n');
-  const blob = new Blob([emlBody], { type: 'message/rfc822' });
-  const filename = `collections-alert-${inv.invoiceNumber}-${Date.now()}.eml`;
+  
+  if (pdfBase64) {
+    // Wrapper multipart/mixed > multipart/alternative > body parts + PDF attachment
+    emlLines.push(
+      `--${boundary}`,
+      `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+      ``,
+      `--${altBoundary}`,
+      `Content-Type: text/plain; charset=utf-8`,
+      `Content-Transfer-Encoding: quoted-printable`,
+      ``,
+      encodeQuotedPrintable(plainText),
+      ``,
+      `--${altBoundary}`,
+      `Content-Type: text/html; charset=utf-8`,
+      `Content-Transfer-Encoding: quoted-printable`,
+      ``,
+      encodeQuotedPrintable(htmlBody),
+      ``,
+      `--${altBoundary}--`,
+      ``,
+      `--${boundary}`,
+      `Content-Type: application/pdf; name="${pdfFilename}"`,
+      `Content-Disposition: attachment; filename="${pdfFilename}"`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      wrappedB64,
+      ``,
+      `--${boundary}--`
+    );
+  } else {
+    // No PDF: just multipart/alternative
+    emlLines.push(
+      `--${altBoundary}`,
+      `Content-Type: text/plain; charset=utf-8`,
+      `Content-Transfer-Encoding: quoted-printable`,
+      ``,
+      encodeQuotedPrintable(plainText),
+      ``,
+      `--${altBoundary}`,
+      `Content-Type: text/html; charset=utf-8`,
+      `Content-Transfer-Encoding: quoted-printable`,
+      ``,
+      encodeQuotedPrintable(htmlBody),
+      ``,
+      `--${altBoundary}--`
+    );
+  }
+  
+  const emlContent = emlLines.join('\r\n');
+  const blob = new Blob([emlContent], { type: 'message/rfc822' });
+  const filename = `Internal_Alert_${inv.invoiceNumber}_${(inv.customerName || 'customer').replace(/[^a-zA-Z0-9]/g, '_')}.eml`;
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename;
@@ -5028,9 +5096,10 @@ function generateCollectionsEml(inv, reason) {
   a.click();
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
   
+  const hasPdf = !!pdfBase64;
   toast(en
-    ? `✉ Internal alert .eml downloaded — open with Outlook to send to ${collectionsName || collectionsEmail}`
-    : `✉ Alerta interna .eml descargada — abre con Outlook para mandar a ${collectionsName || collectionsEmail}`,
+    ? `✉ Internal alert .eml downloaded ${hasPdf ? 'WITH PDF attached' : '(no PDF — invoice has no PDF saved)'}. Double-click to open in Outlook → click Send.`
+    : `✉ Alerta interna .eml descargada ${hasPdf ? 'CON PDF adjunto' : '(sin PDF — factura no tiene PDF guardado)'}. Doble click para abrir en Outlook → dale Send.`,
     'success');
 }
 
@@ -5299,6 +5368,47 @@ function getTicketsDbConfig() {
   return DEFAULT_TICKETS_DB;
 }
 
+// ════════════════════════════════════════════════════════════
+// TICKETS Anonymous Auth — sign in to tech-tickets-a9485 to get an
+// auth token for Firestore REST calls. Lets us use rules:
+//   allow read, write: if request.auth != null;
+// instead of public read. Same pattern Alberto uses in TECH-TICKETS app.
+// ════════════════════════════════════════════════════════════
+let _ticketsAuthApp = null;
+let _ticketsAuthToken = null;
+let _ticketsAuthTokenExp = 0;
+
+async function getTicketsAuthToken() {
+  // Return cached token if still valid (refresh 5 min before expiry)
+  if (_ticketsAuthToken && Date.now() < _ticketsAuthTokenExp - 300_000) {
+    return _ticketsAuthToken;
+  }
+  const cfg = getTicketsDbConfig();
+  try {
+    if (!_ticketsAuthApp) {
+      // Initialize a SECOND Firebase app — different project, separate auth
+      _ticketsAuthApp = initializeApp({
+        apiKey: cfg.apiKey,
+        authDomain: `${cfg.projectId}.firebaseapp.com`,
+        projectId: cfg.projectId
+      }, 'tickets-auth'); // unique app name (Firebase requires it)
+    }
+    const auth = getAuth(_ticketsAuthApp);
+    if (!auth.currentUser) {
+      await signInAnonymously(auth);
+      console.info('[TicketsAuth] Signed in anonymously to', cfg.projectId, 'UID:', auth.currentUser?.uid);
+    }
+    const token = await auth.currentUser.getIdToken();
+    _ticketsAuthToken = token;
+    // Firebase ID tokens last 1 hour
+    _ticketsAuthTokenExp = Date.now() + 60 * 60 * 1000;
+    return token;
+  } catch (err) {
+    console.warn('[TicketsAuth] Anonymous auth failed:', err.code, err.message);
+    return null; // fall back to API-key-only mode (works only if rules allow public read)
+  }
+}
+
 let _ticketsCache = null;
 let _ticketsCacheTs = 0;
 let _ticketsCustCache = null;
@@ -5308,6 +5418,7 @@ const TICKETS_CACHE_MS = 60_000;
 async function fetchAllTicketsRaw() {
   if (_ticketsCache && (Date.now() - _ticketsCacheTs) < TICKETS_CACHE_MS) return _ticketsCache;
   const cfg = getTicketsDbConfig();
+  const token = await getTicketsAuthToken();
   const allTickets = [];
   let pageToken = '';
   const MAX_PAGES = 10; // safety cap: up to 10,000 tickets
@@ -5315,10 +5426,11 @@ async function fetchAllTicketsRaw() {
   for (let pageNum = 0; pageNum < MAX_PAGES; pageNum++) {
     let url = `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents/${cfg.ticketsCollection || 'tickets'}?pageSize=1000&key=${cfg.apiKey}`;
     if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
-    const res = await fetch(url);
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    const res = await fetch(url, { headers });
     if (!res.ok) {
       const txt = await res.text().catch(() => '');
-      if (res.status === 403) throw new Error('TICKETS DB bloquea lectura (reglas Firestore). Revisa reglas o configura otro proyecto en Settings.');
+      if (res.status === 403) throw new Error('TICKETS DB bloquea lectura (reglas Firestore o auth no enabled). Revisa reglas o activa Anonymous auth.');
       if (res.status === 404) throw new Error(`Colección "${cfg.ticketsCollection || 'tickets'}" no existe en ${cfg.projectId}`);
       throw new Error(`HTTP ${res.status}: ${txt.slice(0, 100)}`);
     }
@@ -5396,8 +5508,10 @@ async function fetchAllTicketsCustomers() {
     return deriveCustomersFromTickets();
   }
   if (_ticketsCustCache && (Date.now() - _ticketsCustCacheTs) < TICKETS_CACHE_MS) return _ticketsCustCache;
+  const token = await getTicketsAuthToken();
   const url = `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents/${cfg.customersCollection}?pageSize=1000&key=${cfg.apiKey}`;
-  const res = await fetch(url);
+  const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+  const res = await fetch(url, { headers });
   if (!res.ok) {
     // If customers collection doesn't exist, derive from tickets instead
     if (res.status === 404) {
