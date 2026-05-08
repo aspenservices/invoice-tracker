@@ -1005,6 +1005,9 @@ input.field-err, textarea.field-err, select.field-err {
   <!-- SYNC WARNING (shown only when NOT connected to Firebase) -->
   <div id="syncWarning" style="display:none;align-items:center;gap:14px;padding:14px 18px;margin-bottom:16px;background:#FFF7ED;border:1px solid #FED7AA;border-left:4px solid #C2410C;border-radius:var(--r-md);color:#9A3412;font-size:13px;font-weight:600;"></div>
 
+  <!-- UNCONFIRMED ALERTS BANNER (alerts >24h old that were never confirmed sent) -->
+  <div id="unconfirmedBanner" style="display:none;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;margin-bottom:16px;background:#FEF3C7;border:1px solid #FDE047;border-left:4px solid #CA8A04;border-radius:var(--r-md);color:#854D0E;font-size:13px;font-weight:600;"></div>
+
   <!-- SETUP BANNER (shown if Firebase config not set) -->
   <div class="setup-banner" id="setupBanner" style="display:none;">
     <div class="setup-banner-text">
@@ -1067,6 +1070,7 @@ input.field-err, textarea.field-err, select.field-err {
   <!-- TABS -->
   <div class="tabs" id="tabs">
     <button class="tab" data-filter="today"><span data-i18n="tab.today">🌅 Hoy</span> <span class="tab-count" id="cntTodayTab" style="background:var(--pending);color:white;">0</span></button>
+    <button class="tab" data-filter="senttoday"><span data-i18n="tab.senttoday">📤 Enviadas hoy</span> <span class="tab-count" id="cntSentTodayTab" style="background:#0284C7;color:white;">0</span></button>
     <button class="tab active" data-filter="all"><span data-i18n="tab.all">Todas</span> <span class="tab-count" id="cntAll">0</span></button>
     <button class="tab tab-pending" data-filter="pending"><span data-i18n="tab.pending">Pendientes</span> <span class="tab-count" id="cntPendingTab">0</span></button>
     <button class="tab tab-followup" data-filter="followup"><span data-i18n="tab.followup">Por cobrar</span> <span class="tab-count" id="cntFollowupTab">0</span></button>
@@ -1202,11 +1206,11 @@ input.field-err, textarea.field-err, select.field-err {
       </div>
       <div class="send-step">
         <div class="send-step-num">3</div>
-        <div class="send-step-text"><strong>Doble click al .eml</strong> — se abre Outlook con el email completo: cliente, asunto, formato bonito, PDF ya adjunto. Solo revisas y le das <strong>Send</strong>.</div>
+        <div class="send-step-text"><strong>Doble click al .eml</strong> → Outlook abre. Si se ve solo como preview, click <strong>Forward</strong> → confirma el destinatario → click <strong>Send</strong>.</div>
       </div>
       <div class="send-step">
         <div class="send-step-num">4</div>
-        <div class="send-step-text">Vuelves aquí y clickeas <strong>"Marcar como enviada"</strong>.</div>
+        <div class="send-step-text">Vuelves aquí — la app te pregunta automáticamente <strong>"¿Lo enviaste?"</strong> Click <strong>Sí</strong> y queda registrado. ✅</div>
       </div>
 
       <!-- STAGE SELECTOR -->
@@ -1256,7 +1260,7 @@ input.field-err, textarea.field-err, select.field-err {
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('sendModal')">Cerrar</button>
       <button class="btn btn-primary" onclick="generateEmlAndDownload()">📎 Generar email con PDF adjunto</button>
-      <button class="btn btn-success" id="markSentBtn" onclick="markAsSent()">Marcar como enviada</button>
+      <button class="btn btn-ghost" id="markSentBtn" onclick="markAsSent()" style="font-size:11px;color:var(--text-mute);">Marcar enviada manualmente</button>
     </div>
   </div>
 </div>
@@ -1829,6 +1833,9 @@ const I18N = {
     'tab.paid': 'Pagadas',
     'tab.snoozed': '💤 Snoozeadas',
     'tab.problems': '🚨 Problemas',
+    'tab.senttoday': '📤 Enviadas hoy',
+    'unconfirmed.banner': 'Tienes {0} alerta(s) generada(s) hace más de 24h que no confirmaste si las enviaste.',
+    'unconfirmed.review': 'Revisar',
     'tab.customers': '👥 Clientes',
     // Toolbar
     'toolbar.search': 'Buscar por cliente, factura, email… (encuentra snoozeadas)',
@@ -2026,6 +2033,9 @@ const I18N = {
     'tab.paid': 'Paid',
     'tab.snoozed': '💤 Snoozed',
     'tab.problems': '🚨 Problems',
+    'tab.senttoday': '📤 Sent today',
+    'unconfirmed.banner': 'You have {0} alert(s) generated more than 24h ago that you never confirmed sent.',
+    'unconfirmed.review': 'Review',
     'tab.customers': '👥 Customers',
     // Toolbar
     'toolbar.search': 'Search by customer, invoice, email… (finds snoozed)',
@@ -2730,8 +2740,22 @@ function computeAndRender() {
   document.getElementById('cntPaidTab').textContent = cPaid;
   document.getElementById('cntCustomersTab').textContent = allCustomers.length;
   document.getElementById('cntTodayTab').textContent = countTodayTotal();
+  // Sent today count (any sent action or confirmed alert today)
+  const todayMs = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
+  let sentTodayCount = 0;
+  allInvoices.forEach(inv => {
+    (inv.history || []).forEach(h => {
+      if (h.ts < todayMs) return;
+      if (h.action === 'sent') sentTodayCount++;
+      else if ((h.action === 'alert_collections' || h.action === 'alert_check') && h.confirmed) sentTodayCount++;
+    });
+  });
+  document.getElementById('cntSentTodayTab').textContent = sentTodayCount;
   document.getElementById('cntProblemsTab').textContent = getProblemCustomers().length;
   document.getElementById('cntSnoozedTab').textContent = countSnoozed();
+  
+  // Update unconfirmed alerts banner
+  updateUnconfirmedBanner();
 
   // Aging Report (always rendered, hides itself if empty)
   renderAgingCard();
@@ -2839,7 +2863,21 @@ function computeAndRender() {
     renderTodayView();
     return;
   }
-  if (currentFilter === 'problems') {
+  if (currentFilter === 'senttoday') {
+    renderSentTodayView();
+    return;
+  }
+  if (currentFilter === 'unconfirmed') {
+    // Special filter: invoices with unconfirmed alerts (>24h old)
+    const cutoff = Date.now() - (24 * 60 * 60 * 1000);
+    filtered = filtered.filter(i => 
+      (i.history || []).some(h => 
+        (h.action === 'alert_collections' || h.action === 'alert_check') &&
+        !h.confirmed &&
+        h.ts < cutoff
+      )
+    );
+  } else if (currentFilter === 'problems') {
     renderProblemView();
     return;
   }
@@ -4002,12 +4040,33 @@ window.confirmSendCustomerYes = async function(invoiceId, stage) {
   if (!inv) return;
   const now = Date.now();
   const history = [...(inv.history || []), { ts: now, action: 'sent', stage: stage, confirmed: true }];
-  await updateInvoiceData(invoiceId, { status: 'sent', sentAt: now, history, lastEmailStage: stage });
+  
+  // ─── AUTO-SNOOZE: set follow-up date based on stage ───
+  // Stage 1 (first send) → +7 days, Stage 2 (reminder) → +3 days, Stage 3 (past due) → +1 day
+  const daysAhead = ({1: 7, 2: 3, 3: 1})[stage] || 7;
+  const followUp = new Date();
+  followUp.setDate(followUp.getDate() + daysAhead);
+  followUp.setHours(0, 0, 0, 0);
+  const followUpStr = followUp.toISOString().slice(0, 10);
+  
+  const updates = { 
+    status: 'sent', 
+    sentAt: now, 
+    history, 
+    lastEmailStage: stage,
+    nextFollowUp: followUpStr  // auto-set follow-up reminder
+  };
+  await updateInvoiceData(invoiceId, updates);
+  
   const overlay = document.getElementById('confirmSendOverlay');
   if (overlay) overlay.remove();
   closeModal('sendModal');
   const stageLbl = ({1: t('stage.firstSend'), 2: t('stage.reminder'), 3: t('stage.pastDue')})[stage];
-  toast(t('toast.markedSent', inv.invoiceNumber, stageLbl), 'success');
+  const followUpLabel = followUp.toLocaleDateString();
+  toast(currentLang === 'en'
+    ? `✅ Marked as sent (${stageLbl}). Follow-up auto-set for ${followUpLabel} (+${daysAhead}d).`
+    : `✅ Marcada como enviada (${stageLbl}). Follow-up automático: ${followUpLabel} (+${daysAhead}d).`,
+    'success');
 };
 
 // ════════════════════════════════════════════════════════════
@@ -6940,7 +6999,173 @@ function renderProblemView() {
 }
 
 // ════════════════════════════════════════════════════════════
-// QUICKBOOKS CSV EXPORT
+// SENT TODAY VIEW — shows everything sent/confirmed today with stats
+// ════════════════════════════════════════════════════════════
+function renderSentTodayView() {
+  const list = document.getElementById('invoiceList');
+  const en = currentLang === 'en';
+  
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const todayMs = todayStart.getTime();
+  
+  // Collect all "sent activity" today across all invoices
+  const customerSends = []; // { invoice, ts, stage }
+  const internalAlerts = []; // { invoice, ts, action, recipientName, confirmed, location, reason, hasPdf }
+  
+  allInvoices.forEach(inv => {
+    (inv.history || []).forEach(h => {
+      if (h.ts < todayMs) return;
+      if (h.action === 'sent') {
+        customerSends.push({ invoice: inv, ts: h.ts, stage: h.stage });
+      } else if ((h.action === 'alert_collections' || h.action === 'alert_check') && h.confirmed) {
+        internalAlerts.push({ invoice: inv, ts: h.ts, action: h.action, recipientName: h.recipientName, location: h.location, reason: h.reason, hasPdf: h.hasPdf });
+      }
+    });
+  });
+  
+  // Compute stats
+  const totalCustomerSends = customerSends.length;
+  const totalAlerts = internalAlerts.length;
+  const totalChecksTracked = internalAlerts.filter(a => a.action === 'alert_check').reduce((sum, a) => sum + (a.invoice.amount || 0), 0);
+  const totalCustomerAmount = customerSends.reduce((sum, s) => sum + (s.invoice.amount || 0), 0);
+  
+  // Also count un-confirmed (still pending)
+  const pendingConfirmAlerts = [];
+  allInvoices.forEach(inv => {
+    (inv.history || []).forEach(h => {
+      if (h.ts < todayMs) return;
+      if ((h.action === 'alert_collections' || h.action === 'alert_check') && !h.confirmed) {
+        pendingConfirmAlerts.push({ invoice: inv, ts: h.ts, action: h.action });
+      }
+    });
+  });
+  
+  if (totalCustomerSends === 0 && totalAlerts === 0 && pendingConfirmAlerts.length === 0) {
+    list.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">📤</div>
+        <div class="empty-title">${en ? 'Nothing sent today yet' : 'Aún no has enviado nada hoy'}</div>
+        <div class="empty-text">${en ? 'Customer emails and confirmed internal alerts will appear here.' : 'Los emails a clientes y alertas confirmadas aparecerán aquí.'}</div>
+      </div>`;
+    return;
+  }
+  
+  // Build stat cards row
+  const statsHtml = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;">
+      <div style="background:#DBEAFE;border:1px solid #93C5FD;border-radius:var(--r-md);padding:12px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#1E40AF;">${en ? 'Customer emails' : 'Emails a clientes'}</div>
+        <div style="font-size:24px;font-weight:800;color:#0F172A;margin-top:4px;">${totalCustomerSends}</div>
+        <div style="font-size:11px;color:#475569;margin-top:2px;">${fmtCurrency(totalCustomerAmount)} ${en ? 'invoiced' : 'facturado'}</div>
+      </div>
+      <div style="background:#DCFCE7;border:1px solid #86EFAC;border-radius:var(--r-md);padding:12px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#15803D;">${en ? 'Internal alerts ✓' : 'Alertas internas ✓'}</div>
+        <div style="font-size:24px;font-weight:800;color:#0F172A;margin-top:4px;">${totalAlerts}</div>
+        <div style="font-size:11px;color:#475569;margin-top:2px;">${en ? 'confirmed sent' : 'confirmadas enviadas'}</div>
+      </div>
+      <div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:var(--r-md);padding:12px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#854D0E;">${en ? 'Checks tracked' : 'Cheques en tracking'}</div>
+        <div style="font-size:24px;font-weight:800;color:#0F172A;margin-top:4px;">${fmtCurrency(totalChecksTracked)}</div>
+        <div style="font-size:11px;color:#475569;margin-top:2px;">${internalAlerts.filter(a => a.action === 'alert_check').length} ${en ? 'checks' : 'cheques'}</div>
+      </div>
+      <div style="background:${pendingConfirmAlerts.length > 0 ? '#FEE2E2' : '#F1F5F9'};border:1px solid ${pendingConfirmAlerts.length > 0 ? '#FCA5A5' : 'var(--border)'};border-radius:var(--r-md);padding:12px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:${pendingConfirmAlerts.length > 0 ? '#991B1B' : 'var(--text-soft)'};">${en ? 'Pending confirm' : 'Sin confirmar'}</div>
+        <div style="font-size:24px;font-weight:800;color:#0F172A;margin-top:4px;">${pendingConfirmAlerts.length}</div>
+        <div style="font-size:11px;color:#475569;margin-top:2px;">${en ? 'generated, not confirmed' : 'generadas sin confirmar'}</div>
+      </div>
+    </div>`;
+  
+  // Combine + sort all events by time DESC
+  const allEvents = [
+    ...customerSends.map(s => ({ ts: s.ts, type: 'customer', data: s })),
+    ...internalAlerts.map(a => ({ ts: a.ts, type: 'alert', data: a })),
+    ...pendingConfirmAlerts.map(a => ({ ts: a.ts, type: 'pending', data: a }))
+  ].sort((a, b) => b.ts - a.ts);
+  
+  const stageNames = {1: en ? 'First send' : 'Primer envío', 2: en ? 'Reminder' : 'Recordatorio', 3: en ? 'Past due' : 'Vencida'};
+  const eventsHtml = allEvents.map(ev => {
+    const time = new Date(ev.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (ev.type === 'customer') {
+      const inv = ev.data.invoice;
+      return `<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:white;border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:8px;cursor:pointer;" onclick="window.openCustomerDetail('${escapeHtml(inv.customerName).replace(/'/g, "\\'")}')">
+        <div style="font-size:18px;">📧</div>
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:13px;">#${escapeHtml(inv.invoiceNumber)} ${escapeHtml(inv.customerName)}</div>
+          <div style="font-size:11px;color:var(--text-mute);">${escapeHtml(inv.customerEmail || '')} · ${stageNames[ev.data.stage] || '—'}</div>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);">${fmtCurrency(inv.amount)}</div>
+        <div style="font-size:11px;color:var(--text-mute);min-width:60px;text-align:right;">${time}</div>
+      </div>`;
+    }
+    if (ev.type === 'alert') {
+      const inv = ev.data.invoice;
+      const icon = ev.data.action === 'alert_check' ? '💵' : '🚨';
+      const detail = ev.data.action === 'alert_check' ? (en ? 'Check tracking' : 'Tracking de cheque') : (en ? 'Collections alert' : 'Alerta de cobros');
+      return `<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#F0FDF4;border:1px solid #86EFAC;border-radius:var(--r-md);margin-bottom:8px;cursor:pointer;" onclick="window.openPaymentModal('${inv.id}')">
+        <div style="font-size:18px;">${icon}</div>
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:13px;">#${escapeHtml(inv.invoiceNumber)} ${escapeHtml(inv.customerName)} · ✅</div>
+          <div style="font-size:11px;color:var(--text-mute);">${detail} → ${escapeHtml(ev.data.recipientName || '')}</div>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:#15803D;">${fmtCurrency(inv.amount)}</div>
+        <div style="font-size:11px;color:var(--text-mute);min-width:60px;text-align:right;">${time}</div>
+      </div>`;
+    }
+    if (ev.type === 'pending') {
+      const inv = ev.data.invoice;
+      const icon = ev.data.action === 'alert_check' ? '💵' : '🚨';
+      return `<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#FEF3C7;border:1px solid #FDE047;border-radius:var(--r-md);margin-bottom:8px;cursor:pointer;" onclick="window.openPaymentModal('${inv.id}')">
+        <div style="font-size:18px;">${icon}⏰</div>
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:13px;color:#854D0E;">#${escapeHtml(inv.invoiceNumber)} ${escapeHtml(inv.customerName)} · ${en ? 'NOT CONFIRMED' : 'SIN CONFIRMAR'}</div>
+          <div style="font-size:11px;color:#854D0E;">${en ? 'Generated but you did not confirm if you sent it' : 'Generado pero no confirmaste si lo enviaste'} — ${en ? 'click to confirm' : 'click para confirmar'}</div>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:#854D0E;">${fmtCurrency(inv.amount)}</div>
+        <div style="font-size:11px;color:#854D0E;min-width:60px;text-align:right;">${time}</div>
+      </div>`;
+    }
+    return '';
+  }).join('');
+  
+  list.innerHTML = `
+    ${statsHtml}
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-soft);margin-bottom:8px;">${en ? 'Activity today (most recent first)' : 'Actividad de hoy (más reciente primero)'}</div>
+    ${eventsHtml}`;
+}
+
+// ════════════════════════════════════════════════════════════
+// UNCONFIRMED ALERTS BANNER — shows when there are alerts >24h old not confirmed
+// ════════════════════════════════════════════════════════════
+function updateUnconfirmedBanner() {
+  const banner = document.getElementById('unconfirmedBanner');
+  if (!banner) return;
+  const cutoff = Date.now() - (24 * 60 * 60 * 1000);
+  let unconfirmedCount = 0;
+  allInvoices.forEach(inv => {
+    (inv.history || []).forEach(h => {
+      if ((h.action === 'alert_collections' || h.action === 'alert_check') && !h.confirmed && h.ts < cutoff) {
+        unconfirmedCount++;
+      }
+    });
+  });
+  if (unconfirmedCount === 0) {
+    banner.style.display = 'none';
+    return;
+  }
+  banner.style.display = 'flex';
+  banner.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:20px;">⏰</span>
+      <span>${escapeHtml(t('unconfirmed.banner', unconfirmedCount))}</span>
+    </div>
+    <button class="btn btn-sm" style="background:#CA8A04;color:white;border:0;padding:6px 14px;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;" onclick="window.viewUnconfirmed()">${escapeHtml(t('unconfirmed.review'))} →</button>`;
+}
+
+window.viewUnconfirmed = function() {
+  currentFilter = 'unconfirmed';
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  renderInvoices();
+};
 // ════════════════════════════════════════════════════════════
 // Generates a CSV in QuickBooks Receive Payment import format.
 // Headers compatible with QB import wizard:
