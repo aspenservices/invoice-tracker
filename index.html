@@ -230,6 +230,7 @@ textarea { resize: vertical; min-height: 80px; }
 .email-stage-radio.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .email-stage-radio.active[data-stage="2"] { border-color: #C2410C; background: #FFF7ED; color: #9A3412; }
 .email-stage-radio.active[data-stage="3"] { border-color: #B91C1C; background: #FEF2F2; color: #7F1D1D; }
+.email-stage-radio.active[data-stage="4"] { border-color: #15803D; background: #F0FDF4; color: #14532D; }
 
 .invoice-status {
   width: 8px;
@@ -1216,7 +1217,7 @@ input.field-err, textarea.field-err, select.field-err {
       <!-- STAGE SELECTOR -->
       <div style="margin-bottom:16px; padding:14px; background:#F8FAFC; border:1px solid var(--border); border-radius:var(--r-md);">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-soft);margin-bottom:8px;" data-i18n="email.tone">Tono del mensaje</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
           <div class="ps-radio email-stage-radio" data-stage="1" onclick="window.setEmailStage(1)">
             <div style="font-weight:700;" data-i18n="email.stage1">1️⃣ Primer envío</div>
             <div style="font-size:10px;color:var(--text-mute);font-weight:400;margin-top:2px;" data-i18n="email.stage1.desc">Cordial, agradecido</div>
@@ -1228,6 +1229,10 @@ input.field-err, textarea.field-err, select.field-err {
           <div class="ps-radio email-stage-radio" data-stage="3" onclick="window.setEmailStage(3)">
             <div style="font-weight:700;" data-i18n="email.stage3">3️⃣ Aviso final</div>
             <div style="font-size:10px;color:var(--text-mute);font-weight:400;margin-top:2px;" data-i18n="email.stage3.desc">Firme, past due</div>
+          </div>
+          <div class="ps-radio email-stage-radio" data-stage="4" onclick="window.setEmailStage(4)">
+            <div style="font-weight:700;" data-i18n="email.stage4">✅ Recibo</div>
+            <div style="font-size:10px;color:var(--text-mute);font-weight:400;margin-top:2px;" data-i18n="email.stage4.desc">Gracias, ya pagada</div>
           </div>
         </div>
         <div id="stageHint" style="font-size:11px;color:var(--text-mute);margin-top:8px;font-style:italic;"></div>
@@ -1982,7 +1987,8 @@ const I18N = {
     // Sent labels
     'stage.firstSend': 'primer envío',
     'stage.reminder': 'recordatorio',
-    'stage.pastDue': 'aviso final'
+    'stage.pastDue': 'aviso final',
+    'stage.receipt': 'recibo de pago',
   },
   en: {
     // Header
@@ -2182,7 +2188,8 @@ const I18N = {
     // Sent labels
     'stage.firstSend': 'first send',
     'stage.reminder': 'reminder',
-    'stage.pastDue': 'final notice'
+    'stage.pastDue': 'final notice',
+    'stage.receipt': 'paid receipt'
   }
 };
 
@@ -2600,6 +2607,8 @@ function statusLabel(s) {
 // 2 = Friendly reminder (7+ days later, polite nudge)
 // 3 = Firm reminder (15+ days, "this is overdue", final notice tone)
 function suggestEmailStage(inv) {
+  // If invoice is already paid, suggest the receipt/thank-you template
+  if (inv.status === 'paid' || deriveStatus(inv) === 'paid') return 4;
   if (!inv.sentAt) return 1;
   const days = daysSince(inv.sentAt);
   // Also consider how many times re-sent
@@ -2613,6 +2622,7 @@ function buildEmailSubject(inv, stage) {
   stage = stage || suggestEmailStage(inv);
   if (stage === 2) return `Reminder: Invoice #${inv.invoiceNumber} from Aspen Spas`;
   if (stage === 3) return `Past Due: Invoice #${inv.invoiceNumber} — Please remit payment`;
+  if (stage === 4) return `Thank you! Paid invoice #${inv.invoiceNumber} from Aspen Spas`;
   return `Invoice #${inv.invoiceNumber} from Aspen Spas`;
 }
 
@@ -2637,6 +2647,13 @@ function getStageCopy(stage) {
       signoff: 'Sincerely,'
     };
   }
+  if (stage === 4) {
+    return {
+      intro: 'Thank you for trusting <strong style="color:#0f172a;">Aspen Spas</strong> with your service. Your payment has been received — we truly appreciate your business. <strong>Attached you\'ll find your paid invoice for your records.</strong>',
+      closing: 'It\'s a real pleasure to take care of you and your spa. If you ever have questions, need future service, or just want to chat about chemistry or maintenance tips, just reply to this email or give us a call at',
+      signoff: 'With our sincere thanks,'
+    };
+  }
   // Stage 1 — first send
   return {
     intro: 'Thank you for choosing <strong style="color:#0f172a;">Aspen Spas</strong>. Please find your invoice attached for the recent service.',
@@ -2658,6 +2675,13 @@ function getStageCopyPlain(stage) {
       intro: 'Our records show that this invoice is now past due. We\'re re-attaching it here for your convenience. We\'d like to settle this account before it requires further follow-up.',
       closing: 'Please remit payment at your earliest convenience. If there\'s a billing question, a dispute, or you need to arrange payment, please reply or call us at',
       signoff: 'Sincerely,'
+    };
+  }
+  if (stage === 4) {
+    return {
+      intro: 'Thank you for trusting Aspen Spas with your service. Your payment has been received — we truly appreciate your business. Attached you will find your paid invoice for your records.',
+      closing: 'It is a real pleasure to take care of you and your spa. If you ever have questions, need future service, or just want to chat about chemistry or maintenance tips, just reply or call us at',
+      signoff: 'With our sincere thanks,'
     };
   }
   return {
@@ -3182,7 +3206,10 @@ window.openSendModal = function(id) {
   // Show suggestion explanation
   const sendCount = (inv.history || []).filter(h => h.action === 'sent').length;
   let suggestionText = '';
-  if (sendCount === 0) suggestionText = currentLang === 'en' ? 'First send suggested (new invoice).' : 'Primer envío sugerido (factura nueva).';
+  if (suggested === 4) suggestionText = currentLang === 'en'
+    ? '✅ Invoice is PAID — receipt/thank-you template suggested.'
+    : '✅ Factura PAGADA — sugerido template de recibo/gracias.';
+  else if (sendCount === 0) suggestionText = currentLang === 'en' ? 'First send suggested (new invoice).' : 'Primer envío sugerido (factura nueva).';
   else if (suggested === 2) suggestionText = currentLang === 'en' 
     ? `Reminder suggested: already sent ${daysSince(inv.sentAt)} day(s) ago, ${sendCount}× sent.`
     : `Sugerido recordatorio: ya enviada hace ${daysSince(inv.sentAt)} día${daysSince(inv.sentAt) !== 1 ? 's' : ''}, ${sendCount}× enviada.`;
@@ -3212,10 +3239,12 @@ window.markAsSent = async function() {
   const inv = allInvoices.find(i => i.id === sendingId);
   const now = Date.now();
   const history = [...(inv.history || []), { ts: now, action: 'sent', stage: currentEmailStage }];
-  const updates = { status: 'sent', sentAt: now, history, lastEmailStage: currentEmailStage };
-  // If this was a re-send, count it
+  // If invoice is ALREADY paid, don't downgrade status — just log to history
+  const updates = inv.status === 'paid'
+    ? { history, lastEmailStage: currentEmailStage }
+    : { status: 'sent', sentAt: now, history, lastEmailStage: currentEmailStage };
   await updateInvoiceData(sendingId, updates);
-  const stageLabel = ({1: t('stage.firstSend'), 2: t('stage.reminder'), 3: t('stage.pastDue')})[currentEmailStage];
+  const stageLabel = ({1: t('stage.firstSend'), 2: t('stage.reminder'), 3: t('stage.pastDue'), 4: t('stage.receipt')})[currentEmailStage];
   toast(t('toast.markedSent', inv.invoiceNumber, stageLabel), 'success');
   closeModal('sendModal');
 };
@@ -3748,12 +3777,12 @@ function buildEmailHtmlBody(inv, stage) {
   const spaLine = inv.spaModel ? `<tr><td style="padding:8px 0; color:#666; font-size:14px;">Spa:</td><td style="padding:8px 0; color:#0f172a;">${escapeHtml(inv.spaModel)}${inv.serialNumber ? ' · S/N ' + escapeHtml(inv.serialNumber) : ''}</td></tr>` : '';
   
   // Stage-specific header banner color/label
-  const headerBg = stage === 3 ? '#7f1d1d' : (stage === 2 ? '#9a3412' : '#0f172a');
-  const headerLabel = stage === 3 ? 'PAST DUE' : (stage === 2 ? 'REMINDER' : 'INVOICE');
+  const headerBg = stage === 4 ? '#15803D' : (stage === 3 ? '#7f1d1d' : (stage === 2 ? '#9a3412' : '#0f172a'));
+  const headerLabel = stage === 4 ? '✅ PAID — THANK YOU' : (stage === 3 ? 'PAST DUE' : (stage === 2 ? 'REMINDER' : 'INVOICE'));
   
-  // Stage-specific intro paragraph (HTML)
+  // Stage-specific intro paragraph (HTML) — stages 1 and 4 contain HTML <strong> tags, others are plain text
   let introHtml;
-  if (stage === 1) {
+  if (stage === 1 || stage === 4) {
     introHtml = `<p style="margin:0 0 24px 0; font-size:15px; color:#475569; line-height:1.6;">${copy.intro}</p>`;
   } else {
     introHtml = `<p style="margin:0 0 24px 0; font-size:15px; color:#475569; line-height:1.6;">${escapeHtml(copy.intro)}</p>`;
@@ -3761,7 +3790,7 @@ function buildEmailHtmlBody(inv, stage) {
   
   // Stage-specific closing
   let closingHtml;
-  if (stage === 1) {
+  if (stage === 1 || stage === 4) {
     closingHtml = `<p style="margin:24px 0 16px 0; font-size:15px; color:#475569; line-height:1.6;">${copy.closing} <a href="tel:${COMPANY_PHONE.replace(/[^\d]/g, '')}" style="color:#0369a1; text-decoration:none; font-weight:600;">${escapeHtml(COMPANY_PHONE)}</a>.</p>`;
   } else {
     closingHtml = `<p style="margin:24px 0 16px 0; font-size:15px; color:#475569; line-height:1.6;">${escapeHtml(copy.closing)} <a href="tel:${COMPANY_PHONE.replace(/[^\d]/g, '')}" style="color:#0369a1; text-decoration:none; font-weight:600;">${escapeHtml(COMPANY_PHONE)}</a>.</p>`;
@@ -4035,14 +4064,25 @@ window.askConfirmSendCustomer = function(invoiceId, stage) {
 };
 
 window.confirmSendCustomerYes = async function(invoiceId, stage) {
-  // Same as markAsSent but takes invoiceId explicitly
   const inv = allInvoices.find(i => i.id === invoiceId);
   if (!inv) return;
   const now = Date.now();
   const history = [...(inv.history || []), { ts: now, action: 'sent', stage: stage, confirmed: true }];
   
-  // ─── AUTO-SNOOZE: set follow-up date based on stage ───
-  // Stage 1 (first send) → +7 days, Stage 2 (reminder) → +3 days, Stage 3 (past due) → +1 day
+  // If invoice is ALREADY paid, don't downgrade — just log + skip auto-snooze (no follow-up needed for paid)
+  if (inv.status === 'paid') {
+    await updateInvoiceData(invoiceId, { history, lastEmailStage: stage });
+    const overlay = document.getElementById('confirmSendOverlay');
+    if (overlay) overlay.remove();
+    closeModal('sendModal');
+    toast(currentLang === 'en'
+      ? `✅ Email sent to ${escapeHtml(inv.customerName)} (invoice already paid — no follow-up needed)`
+      : `✅ Email enviado a ${escapeHtml(inv.customerName)} (factura ya pagada — sin follow-up)`,
+      'success');
+    return;
+  }
+  
+  // ─── AUTO-SNOOZE: set follow-up date based on stage (only for unpaid invoices) ───
   const daysAhead = ({1: 7, 2: 3, 3: 1})[stage] || 7;
   const followUp = new Date();
   followUp.setDate(followUp.getDate() + daysAhead);
@@ -4054,14 +4094,14 @@ window.confirmSendCustomerYes = async function(invoiceId, stage) {
     sentAt: now, 
     history, 
     lastEmailStage: stage,
-    nextFollowUp: followUpStr  // auto-set follow-up reminder
+    nextFollowUp: followUpStr
   };
   await updateInvoiceData(invoiceId, updates);
   
   const overlay = document.getElementById('confirmSendOverlay');
   if (overlay) overlay.remove();
   closeModal('sendModal');
-  const stageLbl = ({1: t('stage.firstSend'), 2: t('stage.reminder'), 3: t('stage.pastDue')})[stage];
+  const stageLbl = ({1: t('stage.firstSend'), 2: t('stage.reminder'), 3: t('stage.pastDue'), 4: t('stage.receipt')})[stage];
   const followUpLabel = followUp.toLocaleDateString();
   toast(currentLang === 'en'
     ? `✅ Marked as sent (${stageLbl}). Follow-up auto-set for ${followUpLabel} (+${daysAhead}d).`
@@ -6900,6 +6940,7 @@ function renderInvoiceCardHtml(inv) {
         ${s === 'pending' ? `<button class="btn btn-primary btn-sm" onclick="window.openSendModal('${inv.id}')">${escapeHtml(t('card.send'))}</button>` : ''}
         ${s === 'sent' || s === 'followup' ? `<button class="btn btn-success btn-sm" onclick="window.markAsPaid('${inv.id}')">${escapeHtml(t('card.markPaid'))}</button>` : ''}
         ${s === 'sent' || s === 'followup' ? `<button class="btn btn-secondary btn-sm" onclick="window.openSendModal('${inv.id}')">${escapeHtml(t('card.resend'))}</button>` : ''}
+        ${s === 'paid' ? `<button class="btn btn-secondary btn-sm" onclick="window.openSendModal('${inv.id}')" title="${escapeHtml(currentLang === 'en' ? 'Send receipt / resend invoice / send any email to this customer' : 'Mandar recibo / reenviar factura / mandar cualquier email a este cliente')}">📩 ${escapeHtml(currentLang === 'en' ? 'Send' : 'Enviar')}</button>` : ''}
         <button class="btn btn-ghost btn-sm" onclick="window.openPaymentModal('${inv.id}')" title="${escapeHtml(t('card.payment.title'))}">💳</button>
         ${s !== 'paid' ? (isSnoozedFlag ? `<button class="btn btn-ghost btn-sm" onclick="window.unsnoozeInvoice('${inv.id}')" title="${escapeHtml(t('card.unsnooze.title'))}">⏰</button>` : `<button class="btn btn-ghost btn-sm" onclick="window.openSnoozeMenu(event, '${inv.id}')" title="${escapeHtml(t('card.snooze.title'))}">💤</button>`) : ''}
         <button class="btn btn-ghost btn-sm" onclick="window.openEditModal('${inv.id}')">${escapeHtml(t('card.edit'))}</button>
