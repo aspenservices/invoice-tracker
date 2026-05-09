@@ -1141,7 +1141,7 @@ input.field-err, textarea.field-err, select.field-err {
           <span class="field-hint" data-i18n="form.customer.greetingHint">Vacío = se autocompleta</span>
         </div>
         <div class="field">
-          <label><span data-i18n="form.customer.email">Email del cliente</span> <span class="req">*</span></label>
+          <label><span data-i18n="form.customer.email">Email del cliente</span> <span style="color:var(--text-mute);font-size:11px;font-weight:400;" data-i18n="form.customer.email.optional">(opcional — déjalo vacío si no tiene)</span></label>
           <input type="email" id="fCustomerEmail" data-i18n-ph="form.customer.emailPlaceholder" placeholder="cliente@email.com" autocomplete="off">
         </div>
         <div class="field">
@@ -1339,7 +1339,7 @@ Mahogany Durawood..."></textarea>
           <input type="text" id="cGreeting" placeholder="Auto desde nombre" autocomplete="off">
         </div>
         <div class="field">
-          <label>Email <span class="req">*</span></label>
+          <label>Email <span style="color:var(--text-mute);font-size:11px;font-weight:400;">(opcional)</span></label>
           <input type="email" id="cEmail" placeholder="cliente@email.com" autocomplete="off">
         </div>
         <div class="field">
@@ -1933,6 +1933,7 @@ const I18N = {
     'form.customer.greetingPlaceholder': 'Auto desde nombre completo',
     'form.customer.greetingHint': 'Vacío = se autocompleta',
     'form.customer.email': 'Email del cliente',
+    'form.customer.email.optional': '(opcional — déjalo vacío si no tiene)',
     'form.customer.emailPlaceholder': 'cliente@email.com',
     'form.serviceDate': 'Fecha de servicio',
     'form.technician': 'Técnico',
@@ -2134,6 +2135,7 @@ const I18N = {
     'form.customer.greetingPlaceholder': 'Auto from full name',
     'form.customer.greetingHint': 'Empty = auto-filled',
     'form.customer.email': 'Customer email',
+    'form.customer.email.optional': '(optional — leave empty if customer has no email)',
     'form.customer.emailPlaceholder': 'customer@email.com',
     'form.serviceDate': 'Service date',
     'form.technician': 'Technician',
@@ -3071,8 +3073,7 @@ window.saveInvoice = async function() {
   if (!data.invoiceNumber) { missing.push({ id: 'fInvoiceNumber', label: t('form.validate.field.invoiceNumber') }); }
   if (!data.amount || data.amount <= 0) { missing.push({ id: 'fAmount', label: t('form.validate.field.amount') }); }
   if (!data.customerName) { missing.push({ id: 'fCustomerName', label: t('form.validate.field.customer') }); }
-  if (!data.customerEmail) { missing.push({ id: 'fCustomerEmail', label: t('form.validate.field.email') }); }
-  // Email format check
+  // Email is OPTIONAL — only validate format if provided
   if (data.customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.customerEmail)) {
     missing.push({ id: 'fCustomerEmail', label: t('form.validate.field.emailFormat') });
   }
@@ -3716,12 +3717,64 @@ function parseInvoiceFromLines(lines, allItems) {
   }
   
   // ───────── SERVICE DESCRIPTION ─────────
-  // Buscar línea "Services Provided:" o tomar la 1ra línea después de "Item Description"
+  // Try multiple patterns to extract technician notes from QB invoice
+  // Increased limit to 500 chars to fit detailed multi-sentence service notes
+  
+  // Pattern 1: "Services Provided: ..." (legacy QB template format)
   for (let i = 0; i < lineTexts.length; i++) {
     const m = lineTexts[i].match(/Services?\s*Provided\s*:\s*:?\s*(.+)/i);
     if (m && m[1].trim().length > 5) {
-      result.serviceDescription = m[1].trim().slice(0, 150);
+      result.serviceDescription = m[1].trim().slice(0, 500);
       break;
+    }
+  }
+  
+  // Pattern 2: ".MM/DD/YYYY: TECH performed..." (typical Aspen Spas QB note format)
+  // Example: ".05/06/2026: Pedro performed Platinum Flush service and replaced the heater gaskets..."
+  if (!result.serviceDescription) {
+    // Combine multiple consecutive lines that look like a tech note (date prefix + multi-line continuation)
+    for (let i = 0; i < lineTexts.length; i++) {
+      const m = lineTexts[i].match(/^\.?\s*\d{1,2}\/\d{1,2}\/\d{2,4}\s*:?\s*(.+)/);
+      if (m && m[1].trim().length > 5) {
+        // Collect this line + subsequent continuation lines (until hitting another date, total, tax, or empty section)
+        let combined = m[1].trim();
+        for (let j = i + 1; j < Math.min(i + 5, lineTexts.length); j++) {
+          const next = lineTexts[j].trim();
+          if (!next) break;
+          // Stop if we hit another date marker, totals, taxes, or item header
+          if (/^\.?\s*\d{1,2}\/\d{1,2}\/\d{2,4}/.test(next)) break;
+          if (/^(Total|Tax|Subtotal|Balance|Payment|Item|Qty|Rate|Amount|Service Date|Customer Message|Memo)/i.test(next)) break;
+          // If next line starts with capital and looks like prose, append it
+          if (next.length > 3 && /[a-zA-Z]/.test(next)) {
+            combined += ' ' + next;
+          } else {
+            break;
+          }
+        }
+        result.serviceDescription = combined.slice(0, 500);
+        break;
+      }
+    }
+  }
+  
+  // Pattern 3: "TECH_NAME performed ..." (without date prefix)
+  // Common technician names: Jeremy, Robert, Pedro, Jarred, Fernando, Fabian, Gabriel
+  if (!result.serviceDescription) {
+    for (let i = 0; i < lineTexts.length; i++) {
+      const m = lineTexts[i].match(/^(Jeremy|Robert|Pedro|Jarred|Fernando|Fabian|Gabriel|Neil|Dan|SV|Tech)\s+performed\s+(.+)/i);
+      if (m) {
+        let combined = lineTexts[i].trim();
+        // Append continuation lines
+        for (let j = i + 1; j < Math.min(i + 4, lineTexts.length); j++) {
+          const next = lineTexts[j].trim();
+          if (!next) break;
+          if (/^(Total|Tax|Subtotal|Balance|Payment|Item)/i.test(next)) break;
+          if (next.length > 3 && /[a-zA-Z]/.test(next)) combined += ' ' + next;
+          else break;
+        }
+        result.serviceDescription = combined.slice(0, 500);
+        break;
+      }
     }
   }
   
@@ -4391,8 +4444,13 @@ window.saveCustomer = async function() {
     qbNotesRaw: document.getElementById('cQbRaw').value.trim(),
     notes: document.getElementById('cNotes').value.trim()
   };
-  if (!data.name || !data.email) {
-    toast('Nombre y email son requeridos', 'error');
+  if (!data.name) {
+    toast(currentLang === 'en' ? 'Customer name is required' : 'El nombre del cliente es requerido', 'error');
+    return;
+  }
+  // Email format check only if provided (email is OPTIONAL)
+  if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+    toast(currentLang === 'en' ? 'Invalid email format' : 'Formato de email inválido', 'error');
     return;
   }
   if (editingCustomerId) {
