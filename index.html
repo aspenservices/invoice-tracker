@@ -1145,6 +1145,10 @@ input.field-err, textarea.field-err, select.field-err {
           <input type="email" id="fCustomerEmail" data-i18n-ph="form.customer.emailPlaceholder" placeholder="cliente@email.com" autocomplete="off">
         </div>
         <div class="field">
+          <label><span data-i18n="form.customer.phone">📱 Teléfono</span> <span style="color:var(--text-mute);font-size:11px;font-weight:400;" data-i18n="form.customer.phone.optional">(opcional — para enviar por iMessage)</span></label>
+          <input type="tel" id="fCustomerPhone" placeholder="(314) 555-1234" autocomplete="off">
+        </div>
+        <div class="field">
           <label data-i18n="form.serviceDate">Fecha de servicio</label>
           <input type="date" id="fServiceDate">
         </div>
@@ -1265,6 +1269,7 @@ input.field-err, textarea.field-err, select.field-err {
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('sendModal')">Cerrar</button>
       <button class="btn btn-primary" onclick="generateEmlAndDownload()">📎 Generar email con PDF adjunto</button>
+      <button class="btn" id="sendSmsBtn" onclick="sendViaSms()" style="background:#22C55E;color:white;display:none;">📱 Enviar por iMessage/SMS</button>
       <button class="btn btn-ghost" id="markSentBtn" onclick="markAsSent()" style="font-size:11px;color:var(--text-mute);">Marcar enviada manualmente</button>
     </div>
   </div>
@@ -3010,7 +3015,7 @@ window.openAddModal = function() {
   editingId = null;
   document.getElementById('formTitle').textContent = t('form.invoice.new');
   document.getElementById('formSaveBtn').textContent = t('form.save');
-  ['fInvoiceNumber','fAmount','fCustomerName','fGreetingName','fCustomerEmail','fServiceDesc','fSpaModel','fSerial','fNotes'].forEach(id => document.getElementById(id).value = '');
+  ['fInvoiceNumber','fAmount','fCustomerName','fGreetingName','fCustomerEmail','fCustomerPhone','fServiceDesc','fSpaModel','fSerial','fNotes'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('fTechnician').value = '';
   document.getElementById('fServiceDate').value = new Date().toISOString().split('T')[0];
   // Reset PDF state
@@ -3030,6 +3035,7 @@ window.openEditModal = function(id) {
   document.getElementById('fCustomerName').value = inv.customerName || '';
   document.getElementById('fGreetingName').value = inv.greetingName || '';
   document.getElementById('fCustomerEmail').value = inv.customerEmail || '';
+  document.getElementById('fCustomerPhone').value = inv.customerPhone || '';
   document.getElementById('fServiceDate').value = inv.serviceDate || '';
   document.getElementById('fTechnician').value = inv.technician || '';
   document.getElementById('fServiceDesc').value = inv.serviceDescription || '';
@@ -3055,6 +3061,7 @@ window.saveInvoice = async function() {
     customerName: document.getElementById('fCustomerName').value.trim(),
     greetingName: document.getElementById('fGreetingName').value.trim(),
     customerEmail: document.getElementById('fCustomerEmail').value.trim(),
+    customerPhone: document.getElementById('fCustomerPhone').value.trim(),
     serviceDate: document.getElementById('fServiceDate').value,
     technician: document.getElementById('fTechnician').value,
     serviceDescription: document.getElementById('fServiceDesc').value.trim(),
@@ -3219,7 +3226,16 @@ window.openSendModal = function(id) {
     : `Sugerido aviso final: ya enviada hace ${daysSince(inv.sentAt)} día${daysSince(inv.sentAt) !== 1 ? 's' : ''}, ${sendCount}× enviada.`;
   document.getElementById('stageHint').textContent = suggestionText;
   
-  document.getElementById('prevTo').textContent = inv.customerEmail;
+  document.getElementById('prevTo').textContent = inv.customerEmail || (inv.customerPhone ? '📱 ' + inv.customerPhone + ' (SMS — no email)' : '⚠ No email or phone');
+  
+  // Show/hide SMS button based on phone availability
+  // Look up phone from invoice OR from customer record
+  const customer = (inv.customerName) ? findCustomerByName(inv.customerName) : null;
+  const phoneAvailable = (inv.customerPhone || (customer && customer.phone) || '').replace(/[^\d+]/g, '');
+  const smsBtn = document.getElementById('sendSmsBtn');
+  if (smsBtn) {
+    smsBtn.style.display = phoneAvailable ? 'inline-block' : 'none';
+  }
   
   const attachmentEl = document.getElementById('prevAttachment');
   const warnEl = document.getElementById('sendNoPdfWarn');
@@ -3803,6 +3819,7 @@ function applyExtractedFields(extracted) {
     const existing = findCustomerByName(extracted.customerName);
     if (existing) {
       if (existing.email) document.getElementById('fCustomerEmail').value = existing.email;
+      if (existing.phone) document.getElementById('fCustomerPhone').value = existing.phone;
       if (existing.greetingName) document.getElementById('fGreetingName').value = existing.greetingName;
       if (existing.spaModel && !document.getElementById('fSpaModel').value) document.getElementById('fSpaModel').value = existing.spaModel;
       if (existing.serialNumber && !document.getElementById('fSerial').value) document.getElementById('fSerial').value = existing.serialNumber;
@@ -4050,6 +4067,132 @@ function encodeQuotedPrintable(str) {
   return wrapped;
 }
 
+// ════════════════════════════════════════════════════════════
+// SEND VIA SMS / iMESSAGE — for customers without email but with phone
+// Opens Messages app on Mac (or iPhone) with phone + body pre-filled
+// ════════════════════════════════════════════════════════════
+window.sendViaSms = function() {
+  const inv = allInvoices.find(i => i.id === sendingId);
+  if (!inv) return;
+  
+  // Get phone — try invoice's customerPhone first, fall back to customer record
+  let phone = (inv.customerPhone || '').trim();
+  if (!phone) {
+    const customer = findCustomerByName(inv.customerName);
+    phone = (customer && customer.phone) || '';
+  }
+  if (!phone) {
+    toast(currentLang === 'en' ? 'No phone number on file for this customer' : 'No hay teléfono registrado para este cliente', 'error');
+    return;
+  }
+  
+  // Clean phone — keep digits and leading +
+  let cleanPhone = phone.replace(/[^\d+]/g, '');
+  // Ensure US format if it's 10 digits without country code
+  if (/^\d{10}$/.test(cleanPhone)) cleanPhone = '+1' + cleanPhone;
+  
+  const en = currentLang === 'en';
+  const stage = currentEmailStage;
+  const greet = inv.greetingName || deriveGreetingName(inv.customerName) || (en ? 'there' : 'hola');
+  const amount = fmtCurrency(inv.amount);
+  const invNum = inv.invoiceNumber;
+  const phoneNum = COMPANY_PHONE || '';
+  
+  // Stage-specific SMS body (plain text — SMS doesn't support HTML)
+  let body;
+  if (stage === 4) {
+    // Paid receipt — thank you message
+    body = en
+      ? `Hi ${greet}! ✨\n\nThank you for trusting Aspen Spas with your spa service. We've received your payment of ${amount} for invoice #${invNum}.\n\nWe truly appreciate your business — taking care of you and your spa is a real pleasure.\n\nIf you ever need future service or have questions, just reply or call us at ${phoneNum}.\n\n— Aspen Spas Team 🛁`
+      : `¡Hola ${greet}! ✨\n\nGracias por confiar en Aspen Spas con tu servicio de spa. Recibimos tu pago de ${amount} por la factura #${invNum}.\n\nApreciamos mucho tu confianza — cuidar de ti y de tu spa es un verdadero placer.\n\nSi necesitas servicio futuro o tienes preguntas, responde o llámanos al ${phoneNum}.\n\n— Equipo Aspen Spas 🛁`;
+  } else if (stage === 3) {
+    body = en
+      ? `Hi ${greet},\n\nThis is Aspen Spas. Invoice #${invNum} for ${amount} is now past due.\n\nCould you please reply or call us at ${phoneNum} so we can resolve this together?\n\nThank you,\nAspen Spas`
+      : `Hola ${greet},\n\nLes habla Aspen Spas. La factura #${invNum} por ${amount} ya está vencida.\n\n¿Podrías responder o llamarnos al ${phoneNum} para resolverlo juntos?\n\nGracias,\nAspen Spas`;
+  } else if (stage === 2) {
+    body = en
+      ? `Hi ${greet},\n\nFriendly reminder from Aspen Spas — invoice #${invNum} for ${amount} is still pending. If you've already paid, please disregard. Otherwise, reply or call us at ${phoneNum}.\n\nThank you!\nAspen Spas`
+      : `Hola ${greet},\n\nRecordatorio amigable de Aspen Spas — la factura #${invNum} por ${amount} sigue pendiente. Si ya la pagaste, ignora este mensaje. Si no, responde o llámanos al ${phoneNum}.\n\nGracias!\nAspen Spas`;
+  } else {
+    // Stage 1 — first send
+    body = en
+      ? `Hi ${greet}!\n\nThank you for choosing Aspen Spas. This is your invoice #${invNum} for ${amount} for the recent service.\n\nIf you have questions, reply or call us at ${phoneNum}.\n\nThank you for your business!\n— Aspen Spas Team`
+      : `¡Hola ${greet}!\n\nGracias por elegir Aspen Spas. Esta es tu factura #${invNum} por ${amount} por el servicio reciente.\n\nSi tienes preguntas, responde o llámanos al ${phoneNum}.\n\n¡Gracias por tu confianza!\n— Equipo Aspen Spas`;
+  }
+  
+  // Build sms: URL — works on macOS Messages and iOS
+  // Format: sms:NUMBER?&body=ENCODED_TEXT
+  const smsUrl = `sms:${cleanPhone}?&body=${encodeURIComponent(body)}`;
+  
+  // Open the URL — triggers Messages app
+  window.location.href = smsUrl;
+  
+  // Log to history (audit trail) — same pattern as customer email
+  setTimeout(async () => {
+    const now = Date.now();
+    const histEntry = { ts: now, action: 'sent', stage: stage, channel: 'sms', confirmed: false };
+    const newHistory = [...(inv.history || []), histEntry];
+    
+    // Don't change status if already paid; otherwise mark as sent
+    const updates = inv.status === 'paid'
+      ? { history: newHistory, lastEmailStage: stage }
+      : { history: newHistory, status: 'sent', sentAt: now, lastEmailStage: stage };
+    await updateInvoiceData(inv.id, updates);
+    
+    // Then ask for confirmation
+    const histIdx = newHistory.length - 1;
+    askConfirmSendSms(inv.id, histIdx);
+  }, 800);
+  
+  toast(en
+    ? `📱 Opening Messages with ${phoneNum ? cleanPhone : 'phone'}...`
+    : `📱 Abriendo Messages con ${cleanPhone}...`,
+    'success');
+};
+
+window.askConfirmSendSms = function(invoiceId, historyIndex) {
+  const inv = allInvoices.find(i => i.id === invoiceId);
+  if (!inv) return;
+  const en = currentLang === 'en';
+  
+  const overlay = document.createElement('div');
+  overlay.id = 'confirmSendOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:white;border-radius:16px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,0.3);">
+      <div style="font-size:36px;text-align:center;margin-bottom:8px;">📱</div>
+      <h3 style="margin:0 0 12px 0;text-align:center;font-size:18px;color:#0F172A;">${en ? 'Did you send the SMS?' : '¿Enviaste el SMS?'}</h3>
+      <p style="margin:0 0 20px 0;text-align:center;font-size:14px;color:#475569;line-height:1.5;">
+        ${en
+          ? `In Messages, did you click <strong>Send</strong> on the message to <strong>${escapeHtml(inv.customerName)}</strong>?`
+          : `En Messages, ¿le diste click a <strong>Send</strong> al mensaje para <strong>${escapeHtml(inv.customerName)}</strong>?`}
+      </p>
+      <div style="display:flex;gap:8px;flex-direction:column;">
+        <button onclick="window.confirmSmsYes('${invoiceId}', ${historyIndex})" style="background:#16A34A;color:white;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+          ✅ ${en ? 'Yes — mark as sent' : 'Sí lo envié — marcar enviado'}
+        </button>
+        <button onclick="window.confirmSendNo()" style="background:#F1F5F9;color:#475569;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;">
+          ⏰ ${en ? "Not yet — I'll send it later" : 'Aún no — lo envío después'}
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+};
+
+window.confirmSmsYes = async function(invoiceId, historyIndex) {
+  const inv = allInvoices.find(i => i.id === invoiceId);
+  if (!inv) return;
+  const newHistory = [...(inv.history || [])];
+  if (newHistory[historyIndex]) {
+    newHistory[historyIndex] = { ...newHistory[historyIndex], confirmed: true, confirmedAt: Date.now() };
+    await updateInvoiceData(invoiceId, { history: newHistory });
+  }
+  const overlay = document.getElementById('confirmSendOverlay');
+  if (overlay) overlay.remove();
+  closeModal('sendModal');
+  toast(currentLang === 'en' ? '✅ SMS marked as sent' : '✅ SMS marcado como enviado', 'success');
+};
+
 window.generateEmlAndDownload = function() {
   const inv = allInvoices.find(i => i.id === sendingId);
   if (!inv) return;
@@ -4236,6 +4379,7 @@ window.pickTicketCustomer = function(tk) {
   document.getElementById('fCustomerName').value = tk.name || '';
   document.getElementById('fGreetingName').value = tk.greetingName || deriveGreetingName(tk.name) || '';
   document.getElementById('fCustomerEmail').value = tk.email || '';
+  document.getElementById('fCustomerPhone').value = tk.phone || '';
   document.getElementById('fSpaModel').value = tk.spaModel || '';
   document.getElementById('fSerial').value = tk.serialNumber || '';
   document.getElementById('customerSuggestions').classList.remove('open');
@@ -4271,6 +4415,7 @@ window.pickCustomer = function(id) {
   document.getElementById('fCustomerName').value = c.name || '';
   document.getElementById('fGreetingName').value = c.greetingName || '';
   document.getElementById('fCustomerEmail').value = c.email || '';
+  document.getElementById('fCustomerPhone').value = c.phone || '';
   document.getElementById('fSpaModel').value = c.spaModel || '';
   document.getElementById('fSerial').value = c.serialNumber || '';
   document.getElementById('customerSuggestions').classList.remove('open');
@@ -6008,6 +6153,7 @@ window.cdNewInvoiceForCustomer = function() {
     const c = allCustomers.find(x => x.id === cdCurrentCustomerId);
     if (c) {
       document.getElementById('fCustomerEmail').value = c.email || '';
+      document.getElementById('fCustomerPhone').value = c.phone || '';
       document.getElementById('fGreetingName').value = c.greetingName || '';
       document.getElementById('fSpaModel').value = c.spaModel || '';
       document.getElementById('fSerial').value = c.serialNumber || '';
@@ -6972,8 +7118,9 @@ function renderInvoiceCardHtml(inv) {
       ? when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
       : when.toLocaleDateString();
     // Stage-specific icons: 1=📧 first send, 2=🔔 reminder, 3=⚠️ past due, 4=💚 receipt/thanks
+    // If channel is SMS, override with 📱
     const stageIcons = { 1: '📧', 2: '🔔', 3: '⚠️', 4: '💚' };
-    const icon = stageIcons[lastSent.stage] || '📧';
+    const icon = lastSent.channel === 'sms' ? '📱' : (stageIcons[lastSent.stage] || '📧');
     // Use customer first name if available
     const customerFirstName = (inv.greetingName || (inv.customerName || '').split(/[ &,]/)[0] || 'Cliente').trim();
     const recipient = escapeHtml(customerFirstName);
