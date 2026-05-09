@@ -4075,20 +4075,18 @@ window.sendViaSms = function() {
   const inv = allInvoices.find(i => i.id === sendingId);
   if (!inv) return;
   
-  // Get phone — try invoice's customerPhone first, fall back to customer record
+  // Get phone
   let phone = (inv.customerPhone || '').trim();
   if (!phone) {
     const customer = findCustomerByName(inv.customerName);
     phone = (customer && customer.phone) || '';
   }
   if (!phone) {
-    toast(currentLang === 'en' ? 'No phone number on file for this customer' : 'No hay teléfono registrado para este cliente', 'error');
+    toast(currentLang === 'en' ? 'No phone number on file' : 'No hay teléfono registrado', 'error');
     return;
   }
   
-  // Clean phone — keep digits and leading +
   let cleanPhone = phone.replace(/[^\d+]/g, '');
-  // Ensure US format if it's 10 digits without country code
   if (/^\d{10}$/.test(cleanPhone)) cleanPhone = '+1' + cleanPhone;
   
   const en = currentLang === 'en';
@@ -4098,85 +4096,134 @@ window.sendViaSms = function() {
   const invNum = inv.invoiceNumber;
   const phoneNum = COMPANY_PHONE || '';
   
-  // Stage-specific SMS body (plain text — SMS doesn't support HTML)
+  // Stage-specific SMS body
   let body;
   if (stage === 4) {
-    // Paid receipt — thank you message
     body = en
-      ? `Hi ${greet}! ✨\n\nThank you for trusting Aspen Spas with your spa service. We've received your payment of ${amount} for invoice #${invNum}.\n\nWe truly appreciate your business — taking care of you and your spa is a real pleasure.\n\nIf you ever need future service or have questions, just reply or call us at ${phoneNum}.\n\n— Aspen Spas Team 🛁`
-      : `¡Hola ${greet}! ✨\n\nGracias por confiar en Aspen Spas con tu servicio de spa. Recibimos tu pago de ${amount} por la factura #${invNum}.\n\nApreciamos mucho tu confianza — cuidar de ti y de tu spa es un verdadero placer.\n\nSi necesitas servicio futuro o tienes preguntas, responde o llámanos al ${phoneNum}.\n\n— Equipo Aspen Spas 🛁`;
+      ? `Hi ${greet}! ✨\n\nThank you for trusting Aspen Spas with your spa service. We've received your payment of ${amount} for invoice #${invNum}.\n\nWe truly appreciate your business — taking care of you and your spa is a real pleasure. Your paid invoice is attached for your records.\n\nIf you ever need future service or have questions, just reply or call us at ${phoneNum}.\n\n— Aspen Spas Team 🛁`
+      : `¡Hola ${greet}! ✨\n\nGracias por confiar en Aspen Spas con tu servicio de spa. Recibimos tu pago de ${amount} por la factura #${invNum}.\n\nApreciamos mucho tu confianza — cuidar de ti y de tu spa es un verdadero placer. Tu factura pagada va adjunta para tus registros.\n\nSi necesitas servicio futuro o tienes preguntas, responde o llámanos al ${phoneNum}.\n\n— Equipo Aspen Spas 🛁`;
   } else if (stage === 3) {
     body = en
-      ? `Hi ${greet},\n\nThis is Aspen Spas. Invoice #${invNum} for ${amount} is now past due.\n\nCould you please reply or call us at ${phoneNum} so we can resolve this together?\n\nThank you,\nAspen Spas`
-      : `Hola ${greet},\n\nLes habla Aspen Spas. La factura #${invNum} por ${amount} ya está vencida.\n\n¿Podrías responder o llamarnos al ${phoneNum} para resolverlo juntos?\n\nGracias,\nAspen Spas`;
+      ? `Hi ${greet},\n\nThis is Aspen Spas. Invoice #${invNum} for ${amount} is now past due. Invoice attached.\n\nCould you please reply or call us at ${phoneNum} so we can resolve this together?\n\nThank you,\nAspen Spas`
+      : `Hola ${greet},\n\nLes habla Aspen Spas. La factura #${invNum} por ${amount} ya está vencida. Factura adjunta.\n\n¿Podrías responder o llamarnos al ${phoneNum} para resolverlo juntos?\n\nGracias,\nAspen Spas`;
   } else if (stage === 2) {
     body = en
-      ? `Hi ${greet},\n\nFriendly reminder from Aspen Spas — invoice #${invNum} for ${amount} is still pending. If you've already paid, please disregard. Otherwise, reply or call us at ${phoneNum}.\n\nThank you!\nAspen Spas`
-      : `Hola ${greet},\n\nRecordatorio amigable de Aspen Spas — la factura #${invNum} por ${amount} sigue pendiente. Si ya la pagaste, ignora este mensaje. Si no, responde o llámanos al ${phoneNum}.\n\nGracias!\nAspen Spas`;
+      ? `Hi ${greet},\n\nFriendly reminder from Aspen Spas — invoice #${invNum} for ${amount} is still pending. Invoice attached. If you've already paid, please disregard. Otherwise, reply or call us at ${phoneNum}.\n\nThank you!\nAspen Spas`
+      : `Hola ${greet},\n\nRecordatorio amigable de Aspen Spas — la factura #${invNum} por ${amount} sigue pendiente. Factura adjunta. Si ya la pagaste, ignora este mensaje. Si no, responde o llámanos al ${phoneNum}.\n\nGracias!\nAspen Spas`;
   } else {
-    // Stage 1 — first send
     body = en
-      ? `Hi ${greet}!\n\nThank you for choosing Aspen Spas. This is your invoice #${invNum} for ${amount} for the recent service.\n\nIf you have questions, reply or call us at ${phoneNum}.\n\nThank you for your business!\n— Aspen Spas Team`
-      : `¡Hola ${greet}!\n\nGracias por elegir Aspen Spas. Esta es tu factura #${invNum} por ${amount} por el servicio reciente.\n\nSi tienes preguntas, responde o llámanos al ${phoneNum}.\n\n¡Gracias por tu confianza!\n— Equipo Aspen Spas`;
+      ? `Hi ${greet}!\n\nThank you for choosing Aspen Spas. This is your invoice #${invNum} for ${amount} for the recent service. Invoice attached.\n\nIf you have questions, reply or call us at ${phoneNum}.\n\nThank you for your business!\n— Aspen Spas Team`
+      : `¡Hola ${greet}!\n\nGracias por elegir Aspen Spas. Esta es tu factura #${invNum} por ${amount} por el servicio reciente. Factura adjunta.\n\nSi tienes preguntas, responde o llámanos al ${phoneNum}.\n\n¡Gracias por tu confianza!\n— Equipo Aspen Spas`;
   }
   
-  // Build sms: URL — works on macOS Messages and iOS
-  // Format: sms:NUMBER?&body=ENCODED_TEXT
   const smsUrl = `sms:${cleanPhone}?&body=${encodeURIComponent(body)}`;
+  const hasPdf = !!inv.pdfBase64;
   
-  // Open the URL — triggers Messages app
-  window.location.href = smsUrl;
+  // Step 1 — Download PDF first (if exists)
+  let pdfFilename = null;
+  if (hasPdf) {
+    pdfFilename = inv.pdfFilename || `Invoice_${inv.invoiceNumber}.pdf`;
+    // Convert base64 → blob → download
+    const b64 = inv.pdfBase64;
+    const byteChars = atob(b64);
+    const byteNumbers = new Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+    const byteArray = new Uint8Array(byteNumbers);
+    const pdfBlob = new Blob([byteArray], { type: 'application/pdf' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(pdfBlob);
+    a.download = pdfFilename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 200);
+  }
   
-  // Log to history (audit trail) — same pattern as customer email
-  setTimeout(async () => {
-    const now = Date.now();
-    const histEntry = { ts: now, action: 'sent', stage: stage, channel: 'sms', confirmed: false };
-    const newHistory = [...(inv.history || []), histEntry];
-    
-    // Don't change status if already paid; otherwise mark as sent
-    const updates = inv.status === 'paid'
-      ? { history: newHistory, lastEmailStage: stage }
-      : { history: newHistory, status: 'sent', sentAt: now, lastEmailStage: stage };
-    await updateInvoiceData(inv.id, updates);
-    
-    // Then ask for confirmation
-    const histIdx = newHistory.length - 1;
-    askConfirmSendSms(inv.id, histIdx);
-  }, 800);
-  
-  toast(en
-    ? `📱 Opening Messages with ${phoneNum ? cleanPhone : 'phone'}...`
-    : `📱 Abriendo Messages con ${cleanPhone}...`,
-    'success');
-};
-
-window.askConfirmSendSms = function(invoiceId, historyIndex) {
-  const inv = allInvoices.find(i => i.id === invoiceId);
-  if (!inv) return;
-  const en = currentLang === 'en';
+  // Step 2 — Show step-by-step instructions modal BEFORE opening Messages
+  // Replace any existing overlay
+  const existing = document.getElementById('confirmSendOverlay');
+  if (existing) existing.remove();
   
   const overlay = document.createElement('div');
   overlay.id = 'confirmSendOverlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  
+  const stepsHtml = hasPdf ? `
+    <div style="text-align:left;background:#F1F5F9;padding:14px 16px;border-radius:8px;font-size:13px;line-height:1.7;color:#0F172A;">
+      <div style="font-weight:700;margin-bottom:8px;">${en ? 'Steps to send with PDF:' : 'Pasos para enviar con PDF:'}</div>
+      <div>✅ <strong>${en ? 'PDF downloaded' : 'PDF descargado'}:</strong> <code style="background:white;padding:2px 6px;border-radius:4px;font-size:11px;">${escapeHtml(pdfFilename)}</code></div>
+      <div>2️⃣ ${en ? 'Click "Open Messages" below — Messages opens with text pre-filled.' : 'Click "Abrir Messages" abajo — Messages se abrirá con el texto pre-llenado.'}</div>
+      <div>3️⃣ <strong style="color:#0284C7;">${en ? 'Drag the PDF from Downloads → into the Messages chat.' : 'Arrastra el PDF de Downloads → al chat de Messages.'}</strong></div>
+      <div>4️⃣ ${en ? 'Click Send in Messages.' : 'Click Send en Messages.'}</div>
+      <div>5️⃣ ${en ? 'Come back here to confirm.' : 'Vuelve aquí a confirmar.'}</div>
+    </div>` : `
+    <div style="text-align:left;background:#F1F5F9;padding:14px 16px;border-radius:8px;font-size:13px;line-height:1.7;color:#0F172A;">
+      <div style="font-weight:700;margin-bottom:8px;">${en ? 'Note:' : 'Nota:'}</div>
+      <div>⚠ ${en ? 'This invoice has no PDF saved. Only the text message will be sent.' : 'Esta factura no tiene PDF guardado. Solo se enviará el texto.'}</div>
+      <div>2️⃣ ${en ? 'Click "Open Messages" below.' : 'Click "Abrir Messages" abajo.'}</div>
+      <div>3️⃣ ${en ? 'Click Send in Messages.' : 'Click Send en Messages.'}</div>
+    </div>`;
+  
   overlay.innerHTML = `
-    <div style="background:white;border-radius:16px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,0.3);">
+    <div style="background:white;border-radius:16px;max-width:500px;width:100%;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,0.3);">
       <div style="font-size:36px;text-align:center;margin-bottom:8px;">📱</div>
-      <h3 style="margin:0 0 12px 0;text-align:center;font-size:18px;color:#0F172A;">${en ? 'Did you send the SMS?' : '¿Enviaste el SMS?'}</h3>
-      <p style="margin:0 0 20px 0;text-align:center;font-size:14px;color:#475569;line-height:1.5;">
-        ${en
-          ? `In Messages, did you click <strong>Send</strong> on the message to <strong>${escapeHtml(inv.customerName)}</strong>?`
-          : `En Messages, ¿le diste click a <strong>Send</strong> al mensaje para <strong>${escapeHtml(inv.customerName)}</strong>?`}
-      </p>
-      <div style="display:flex;gap:8px;flex-direction:column;">
-        <button onclick="window.confirmSmsYes('${invoiceId}', ${historyIndex})" style="background:#16A34A;color:white;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
-          ✅ ${en ? 'Yes — mark as sent' : 'Sí lo envié — marcar enviado'}
+      <h3 style="margin:0 0 16px 0;text-align:center;font-size:18px;color:#0F172A;">${en ? 'Send via iMessage/SMS' : 'Enviar por iMessage/SMS'}</h3>
+      <div style="text-align:center;font-size:13px;color:#475569;margin-bottom:14px;">${en ? 'To' : 'Para'}: <strong>${escapeHtml(inv.customerName)}</strong> · 📱 ${escapeHtml(cleanPhone)}</div>
+      ${stepsHtml}
+      <div style="display:flex;gap:8px;flex-direction:column;margin-top:16px;">
+        <button onclick="window.openMessagesWithSms('${invNum}', '${cleanPhone}', this)" data-sms-url="${escapeHtml(smsUrl)}" style="background:#22C55E;color:white;border:0;padding:14px 16px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">
+          📱 ${en ? 'Open Messages now' : 'Abrir Messages ahora'}
         </button>
-        <button onclick="window.confirmSendNo()" style="background:#F1F5F9;color:#475569;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;">
-          ⏰ ${en ? "Not yet — I'll send it later" : 'Aún no — lo envío después'}
+        <button onclick="document.getElementById('confirmSendOverlay').remove();" style="background:#F1F5F9;color:#475569;border:0;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;">
+          ${en ? 'Cancel' : 'Cancelar'}
         </button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+};
+
+// Click handler for "Open Messages now" — triggers sms: URL and replaces modal with confirm
+window.openMessagesWithSms = function(invNum, phone, btnEl) {
+  const url = btnEl.dataset.smsUrl;
+  // Open Messages
+  window.location.href = url;
+  
+  // Wait briefly for Messages to open, then transition modal to confirm
+  setTimeout(async () => {
+    const inv = allInvoices.find(i => i.invoiceNumber === invNum);
+    if (!inv) return;
+    
+    const now = Date.now();
+    const histEntry = { ts: now, action: 'sent', stage: currentEmailStage, channel: 'sms', confirmed: false };
+    const newHistory = [...(inv.history || []), histEntry];
+    const updates = inv.status === 'paid'
+      ? { history: newHistory, lastEmailStage: currentEmailStage }
+      : { history: newHistory, status: 'sent', sentAt: now, lastEmailStage: currentEmailStage };
+    await updateInvoiceData(inv.id, updates);
+    
+    // Replace modal content with confirmation
+    const overlay = document.getElementById('confirmSendOverlay');
+    if (overlay) {
+      const en = currentLang === 'en';
+      overlay.innerHTML = `
+        <div style="background:white;border-radius:16px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,0.3);">
+          <div style="font-size:36px;text-align:center;margin-bottom:8px;">📱</div>
+          <h3 style="margin:0 0 12px 0;text-align:center;font-size:18px;color:#0F172A;">${en ? 'Did you send the SMS?' : '¿Enviaste el SMS?'}</h3>
+          <p style="margin:0 0 20px 0;text-align:center;font-size:14px;color:#475569;line-height:1.5;">
+            ${en
+              ? `In Messages, did you drag the PDF and click <strong>Send</strong> to <strong>${escapeHtml(inv.customerName)}</strong>?`
+              : `En Messages, ¿arrastraste el PDF y le diste click a <strong>Send</strong> a <strong>${escapeHtml(inv.customerName)}</strong>?`}
+          </p>
+          <div style="display:flex;gap:8px;flex-direction:column;">
+            <button onclick="window.confirmSmsYes('${inv.id}', ${newHistory.length - 1})" style="background:#16A34A;color:white;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+              ✅ ${en ? 'Yes — mark as sent' : 'Sí lo envié — marcar enviado'}
+            </button>
+            <button onclick="window.confirmSendNo()" style="background:#F1F5F9;color:#475569;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;">
+              ⏰ ${en ? "Not yet — I'll send it later" : 'Aún no — lo envío después'}
+            </button>
+          </div>
+        </div>`;
+    }
+  }, 600);
 };
 
 window.confirmSmsYes = async function(invoiceId, historyIndex) {
