@@ -3238,7 +3238,8 @@ window.markAsSent = async function() {
   if (!sendingId) return;
   const inv = allInvoices.find(i => i.id === sendingId);
   const now = Date.now();
-  const history = [...(inv.history || []), { ts: now, action: 'sent', stage: currentEmailStage }];
+  // Manual click = explicit confirmation, so set confirmed:true
+  const history = [...(inv.history || []), { ts: now, action: 'sent', stage: currentEmailStage, confirmed: true }];
   // If invoice is ALREADY paid, don't downgrade status — just log to history
   const updates = inv.status === 'paid'
     ? { history, lastEmailStage: currentEmailStage }
@@ -6901,6 +6902,43 @@ function renderInvoiceCardHtml(inv) {
       : `${stateIcon} ${stateLabel} a ${recipient} a las ${when.toLocaleString()}. ${alertEvents.length} alerta(s). ${isConfirmed ? 'Confirmaste que enviaste.' : 'NO confirmado aún — confirma en payment modal.'}`;
     return `<span style="font-size:10px;color:${fg};background:${bg};padding:2px 8px;border-radius:999px;font-weight:700;border:1px solid ${border};" title="${escapeHtml(tooltip)}">${stateIcon} ${icon} ${recipient} · ${timeStr}${alertEvents.length > 1 ? ` (×${alertEvents.length})` : ''}</span>`;
   })() : '';
+  
+  // Customer email send badge — shows when emails have been sent to the customer
+  const sentEvents = (inv.history || []).filter(h => h.action === 'sent');
+  const lastSent = sentEvents[sentEvents.length - 1];
+  const customerSentBadge = lastSent ? (() => {
+    const when = new Date(lastSent.ts);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const isToday = when.getTime() >= today.getTime();
+    const timeStr = isToday 
+      ? when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+      : when.toLocaleDateString();
+    // Stage-specific icons: 1=📧 first send, 2=🔔 reminder, 3=⚠️ past due, 4=💚 receipt/thanks
+    const stageIcons = { 1: '📧', 2: '🔔', 3: '⚠️', 4: '💚' };
+    const icon = stageIcons[lastSent.stage] || '📧';
+    // Use customer first name if available
+    const customerFirstName = (inv.greetingName || (inv.customerName || '').split(/[ &,]/)[0] || 'Cliente').trim();
+    const recipient = escapeHtml(customerFirstName);
+    // Legacy entries (before confirm modal existed) have confirmed:undefined — treat as confirmed
+    const isConfirmed = lastSent.confirmed !== false;
+    const stateLabel = isConfirmed
+      ? (currentLang === 'en' ? 'Sent' : 'Enviado')
+      : (currentLang === 'en' ? 'Generated' : 'Generado');
+    const stateIcon = isConfirmed ? '✅' : '⏰';
+    // Different color palette than alerts (so they're visually distinct)
+    // Customer sends: blue tint when confirmed, yellow when not
+    const bg = isConfirmed ? '#DBEAFE' : '#FEF3C7';
+    const fg = isConfirmed ? '#1E40AF' : '#92400E';
+    const border = isConfirmed ? '#93C5FD' : '#FDE047';
+    const stageNames = currentLang === 'en' 
+      ? { 1: 'first send', 2: 'reminder', 3: 'past due', 4: 'paid receipt' }
+      : { 1: 'primer envío', 2: 'recordatorio', 3: 'aviso final', 4: 'recibo de pago' };
+    const stageName = stageNames[lastSent.stage] || 'email';
+    const tooltip = currentLang === 'en'
+      ? `${stateIcon} ${stateLabel} to ${recipient} at ${when.toLocaleString()} (${stageName}). ${sentEvents.length} email(s) total. ${isConfirmed ? 'You confirmed Send was clicked.' : 'NOT confirmed sent yet.'}`
+      : `${stateIcon} ${stateLabel} a ${recipient} a las ${when.toLocaleString()} (${stageName}). ${sentEvents.length} email(s) en total. ${isConfirmed ? 'Confirmaste que enviaste.' : 'NO confirmado aún.'}`;
+    return `<span style="font-size:10px;color:${fg};background:${bg};padding:2px 8px;border-radius:999px;font-weight:700;border:1px solid ${border};" title="${escapeHtml(tooltip)}">${stateIcon} ${icon} ${recipient} · ${timeStr}${sentEvents.length > 1 ? ` (×${sentEvents.length})` : ''}</span>`;
+  })() : '';
   const ccBadge = inv.ccRequested && s !== 'paid' ? `<span style="font-size:10px;color:var(--sent);font-weight:600;" title="${escapeHtml(t('card.ccRequestedTitle'))}">${escapeHtml(t('card.ccRequested'))}</span>` : '';
   const fuLabel = inv.nextFollowUp && s !== 'paid' ? `<span style="color:var(--followup);font-size:11px;">${escapeHtml(t('card.followupOn', inv.nextFollowUp))}</span>` : '';
   // Snooze indicator
@@ -6933,6 +6971,7 @@ function renderInvoiceCardHtml(inv) {
           ${fuLabel}
           ${snoozeLabel}
           ${alertBadge}
+          ${customerSentBadge}
         </div>
       </div>
       <div class="invoice-amount">${fmtCurrency(inv.amount)}</div>
