@@ -977,6 +977,118 @@ input.field-err, textarea.field-err, select.field-err {
   .cd-inv-row { grid-template-columns: 1fr auto; gap: 6px 10px; }
   .ps-radio-group { grid-template-columns: 1fr; }
 }
+/* ════════════════════════════════════════════════════════════
+   MOBILE-RESPONSIVE — bottom-sheet design for iPhone (≤768px)
+   ════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  body { font-size: 14px; }
+  .container { padding: 12px; }
+  
+  /* Stack toolbar buttons */
+  .toolbar { flex-direction: column; gap: 8px; align-items: stretch; }
+  .toolbar .btn { width: 100%; }
+  .search-box { width: 100%; }
+  
+  /* Tabs scroll horizontally */
+  .tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+  .tab { flex-shrink: 0; font-size: 13px; padding: 8px 12px; }
+  
+  /* Aging cards stack 2x2 */
+  .aging-bands { grid-template-columns: 1fr 1fr !important; }
+  
+  /* Invoice cards stack vertically */
+  .invoice-card {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 10px;
+    padding: 14px !important;
+  }
+  .invoice-main { width: 100%; }
+  .invoice-title { flex-wrap: wrap; gap: 6px; }
+  .invoice-num { font-size: 13px; }
+  .invoice-customer { font-size: 14px; }
+  .invoice-meta { flex-wrap: wrap; gap: 8px; font-size: 11px; }
+  .invoice-amount {
+    text-align: left !important;
+    font-size: 18px !important;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+    margin-top: 4px;
+  }
+  .invoice-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+  }
+  .invoice-actions .btn { font-size: 12px; padding: 8px 10px; }
+  .invoice-actions .btn-icon { padding: 8px; }
+  
+  /* Modal becomes bottom sheet */
+  .modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92vh !important;
+    margin: 0 !important;
+    border-radius: 16px 16px 0 0 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    top: auto !important;
+  }
+  .modal-backdrop { align-items: flex-end !important; padding: 0 !important; }
+  .modal-header { padding: 14px 16px; }
+  .modal-body { padding: 16px; }
+  .modal-footer {
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .modal-footer .btn { width: 100%; }
+  
+  /* Form fields full-width on mobile */
+  .form-grid { grid-template-columns: 1fr !important; }
+  
+  /* Make inputs touch-friendly */
+  input, select, textarea, button { font-size: 16px !important; /* prevents iOS zoom */ }
+  .btn { min-height: 44px; }
+  
+  /* Today revenue card */
+  #todayRevenueCard { padding: 14px 16px !important; }
+  #todayRevAmount { font-size: 24px !important; }
+  
+  /* Stat cards in Sent Today view */
+  #invoiceList > div[style*="grid-template-columns:repeat(4,1fr)"] {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  
+  /* Customer detail summary cards */
+  #cdSummaryRow { grid-template-columns: 1fr 1fr !important; }
+  
+  /* Bulk action bar */
+  #bulkActionBar {
+    bottom: 12px !important;
+    left: 12px !important;
+    right: 12px !important;
+    transform: none !important;
+    width: auto !important;
+    flex-wrap: wrap;
+  }
+  
+  /* Hide non-essential meta on small screens */
+  .invoice-meta .invoice-tech { font-size: 10px; }
+}
+
+@media (max-width: 480px) {
+  /* Even smaller — phone in portrait */
+  .tab { font-size: 12px; padding: 6px 10px; }
+  .tab-count { font-size: 10px; padding: 1px 6px; }
+  .invoice-title { font-size: 13px; }
+  #cdSummaryRow { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+  .cd-summary-card { padding: 10px !important; }
+  .cd-summary-value { font-size: 18px !important; }
+}
 </style>
 </head>
 <body>
@@ -1048,6 +1160,27 @@ input.field-err, textarea.field-err, select.field-err {
   <!-- ALERTS -->
   <div class="alerts" id="alertsBox"></div>
 
+  <!-- TODAY'S REVENUE — prominent stat card -->
+  <div id="todayRevenueCard" style="display:none;background:linear-gradient(135deg, #0F172A 0%, #1E293B 100%);color:white;padding:18px 24px;border-radius:var(--r-md);margin-bottom:16px;box-shadow:0 4px 16px rgba(15,23,42,0.15);">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#94A3B8;margin-bottom:2px;" data-i18n="today.revenue.label">📤 Hoy</div>
+        <div style="display:flex;align-items:baseline;gap:12px;">
+          <div id="todayRevAmount" style="font-size:32px;font-weight:800;font-family:'SF Mono',ui-monospace,monospace;">$0.00</div>
+          <div id="todayRevDelta" style="font-size:13px;font-weight:600;color:#86EFAC;"></div>
+        </div>
+        <div id="todayRevCount" style="font-size:12px;color:#CBD5E1;margin-top:2px;">0 facturas</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#94A3B8;margin-bottom:2px;" data-i18n="today.revenue.yesterday">Ayer</div>
+        <div id="yesterdayRevAmount" style="font-size:18px;font-weight:600;color:#CBD5E1;font-family:'SF Mono',ui-monospace,monospace;">$0.00</div>
+        <div id="yesterdayRevCount" style="font-size:11px;color:#94A3B8;">0 facturas</div>
+      </div>
+    </div>
+    <!-- Mini bar chart of last 7 days -->
+    <div id="weeklyMiniChart" style="margin-top:14px;display:flex;align-items:flex-end;gap:6px;height:42px;"></div>
+  </div>
+
   <!-- AGING REPORT -->
   <div class="aging-card" id="agingCard" style="display:none;">
     <div class="aging-header">
@@ -1065,6 +1198,8 @@ input.field-err, textarea.field-err, select.field-err {
     </div>
     <button class="btn btn-secondary" onclick="exportCSV()" data-i18n="toolbar.exportCsv">Exportar CSV</button>
     <button class="btn btn-secondary" onclick="exportQbCsv()" data-i18n="toolbar.exportQb" data-i18n-title="toolbar.exportQb.title">📤 Exportar a QB</button>
+    <button class="btn btn-secondary" onclick="exportWeeklyReport()" data-i18n="toolbar.weeklyReport" title="Reporte para Tom y Sam — Excel con resumen, técnicos, clientes y pendientes">📑 Reporte semanal</button>
+    <button class="btn btn-secondary" onclick="toggleBulkMode()" id="bulkToggleBtn" data-i18n="toolbar.bulkSend">📦 Bulk send</button>
     <button class="btn btn-primary btn-lg" onclick="openAddModal()" data-i18n="toolbar.newInvoice">+ Nueva Factura</button>
   </div>
 
@@ -1080,6 +1215,7 @@ input.field-err, textarea.field-err, select.field-err {
     <button class="tab" data-filter="snoozed"><span data-i18n="tab.snoozed">💤 Snoozeadas</span> <span class="tab-count" id="cntSnoozedTab" style="background:#7c3aed;color:white;">0</span></button>
     <button class="tab" data-filter="problems"><span data-i18n="tab.problems">🚨 Problemas</span> <span class="tab-count" id="cntProblemsTab" style="background:#9F1239;color:white;">0</span></button>
     <button class="tab" data-filter="customers"><span data-i18n="tab.customers">👥 Clientes</span> <span class="tab-count" id="cntCustomersTab">0</span></button>
+    <button class="tab" data-filter="techs"><span data-i18n="tab.techs">👷 Técnicos</span></button>
   </div>
 
   <!-- INVOICE LIST -->
@@ -1683,6 +1819,7 @@ Mahogany Durawood..."></textarea>
             <div class="ps-radio" data-method="" data-i18n="payment.method.none">— Sin pagar —</div>
             <div class="ps-radio" data-method="check" data-i18n="payment.method.check">📝 Cheque</div>
             <div class="ps-radio" data-method="cash" data-i18n="payment.method.cash">💵 Efectivo</div>
+            <div class="ps-radio" data-method="ipospays" data-i18n="payment.method.ipospays">🟢 ipospays</div>
             <div class="ps-radio" data-method="credit_card" data-i18n="payment.method.cc">💳 Tarjeta</div>
             <div class="ps-radio" data-method="ach" data-i18n="payment.method.ach">🏦 ACH</div>
             <div class="ps-radio" data-method="other" data-i18n="payment.method.other">❓ Otro</div>
@@ -1847,10 +1984,13 @@ const I18N = {
     'unconfirmed.banner': 'Tienes {0} alerta(s) generada(s) hace más de 24h que no confirmaste si las enviaste.',
     'unconfirmed.review': 'Revisar',
     'tab.customers': '👥 Clientes',
+    'tab.techs': '👷 Técnicos',
     // Toolbar
     'toolbar.search': 'Buscar por cliente, factura, email… (encuentra snoozeadas)',
     'toolbar.exportCsv': 'Exportar CSV',
     'toolbar.exportQb': '📤 Exportar a QB',
+    'toolbar.weeklyReport': '📑 Reporte semanal',
+    'toolbar.bulkSend': '📦 Bulk send',
     'toolbar.exportQb.title': 'Formato compatible para importar pagos a QuickBooks',
     'toolbar.newInvoice': '+ Nueva Factura',
     // Today view
@@ -1880,6 +2020,7 @@ const I18N = {
     'payment.method.check': '📝 Cheque',
     'payment.method.cash': '💵 Efectivo',
     'payment.method.cc': '💳 Tarjeta',
+    'payment.method.ipospays': '🟢 ipospays',
     'payment.method.ach': '🏦 ACH',
     'payment.method.zelle': '📱 Zelle',
     'payment.method.venmo': '📱 Venmo',
@@ -2049,10 +2190,13 @@ const I18N = {
     'unconfirmed.banner': 'You have {0} alert(s) generated more than 24h ago that you never confirmed sent.',
     'unconfirmed.review': 'Review',
     'tab.customers': '👥 Customers',
+    'tab.techs': '👷 Technicians',
     // Toolbar
     'toolbar.search': 'Search by customer, invoice, email… (finds snoozed)',
     'toolbar.exportCsv': 'Export CSV',
     'toolbar.exportQb': '📤 Export to QB',
+    'toolbar.weeklyReport': '📑 Weekly report',
+    'toolbar.bulkSend': '📦 Bulk send',
     'toolbar.exportQb.title': 'QuickBooks-compatible payment import format',
     'toolbar.newInvoice': '+ New Invoice',
     // Today view
@@ -2082,6 +2226,7 @@ const I18N = {
     'payment.method.check': '📝 Check',
     'payment.method.cash': '💵 Cash',
     'payment.method.cc': '💳 Credit card',
+    'payment.method.ipospays': '🟢 ipospays',
     'payment.method.ach': '🏦 ACH',
     'payment.method.zelle': '📱 Zelle',
     'payment.method.venmo': '📱 Venmo',
@@ -2787,6 +2932,8 @@ function computeAndRender() {
   
   // Update unconfirmed alerts banner
   updateUnconfirmedBanner();
+  // Update today's revenue + 7-day mini chart
+  renderTodayRevenue();
 
   // Aging Report (always rendered, hides itself if empty)
   renderAgingCard();
@@ -2896,6 +3043,10 @@ function computeAndRender() {
   }
   if (currentFilter === 'senttoday') {
     renderSentTodayView();
+    return;
+  }
+  if (currentFilter === 'techs') {
+    renderTechsView();
     return;
   }
   if (currentFilter === 'unconfirmed') {
@@ -5379,16 +5530,27 @@ window.openPaymentModal = function(id) {
 
 window.savePaymentStatus = async function() {
   if (!psEditingId) return;
-  const updates = {
+  const ccChecked = document.getElementById('psCcRequested').checked;
+  let updates = {
     paymentReason: psSelectedReason || null,
     paymentMethod: psSelectedMethod || null,
     paymentRef: document.getElementById('psMethodRef').value.trim() || null,
     checkLocation: psSelectedMethod === 'check' ? (document.getElementById('psCheckLocation').value || null) : null,
-    ccRequested: document.getElementById('psCcRequested').checked,
-    ccRequestedAt: document.getElementById('psCcRequested').checked ? Date.now() : null,
+    ccRequested: ccChecked,
+    ccRequestedAt: ccChecked ? Date.now() : null,
     nextFollowUp: document.getElementById('psNextFollowup').value || null,
     paymentNote: document.getElementById('psNote').value.trim() || null
   };
+  
+  // ─── AUTO-SNOOZE for CC requested: if newly checked, set follow-up +2 days ───
+  const invForCheck = allInvoices.find(i => i.id === psEditingId);
+  const wasNotChecked = !invForCheck || !invForCheck.ccRequested;
+  if (ccChecked && wasNotChecked && !updates.nextFollowUp) {
+    const fu = new Date();
+    fu.setDate(fu.getDate() + 2);
+    fu.setHours(0, 0, 0, 0);
+    updates.nextFollowUp = fu.toISOString().slice(0, 10);
+  }
   // If a payment method was selected, auto-mark invoice as paid — EXCEPT for checks not yet deposited
   let willMarkPaid = false;
   let willMarkCheckPending = false;
@@ -5997,6 +6159,7 @@ function paymentMethodLabel(m) {
   return ({
     check: '📝 Cheque',
     cash: '💵 Efectivo',
+    ipospays: '🟢 ipospays',
     credit_card: '💳 Tarjeta',
     ach: '🏦 ACH',
     zelle: '📱 Zelle',
@@ -6087,11 +6250,48 @@ window.openCustomerDetail = async function(idOrName) {
     else { totalSent += amt; if (s !== 'pending') pendingAmt += amt; }
     if (i.paymentReason && s !== 'paid') ccCount++;
   }
+  
+  // ─── PAYMENT SCORE (A/B/C) ───
+  // A = avg payment ≤7 days + no CC issues
+  // B = avg payment 8-30 days OR 1 CC issue
+  // C = avg payment >30 days OR 2+ CC issues
+  const paidInvs = invs.filter(i => deriveStatus(i) === 'paid' && i.sentAt && i.paidAt);
+  let avgDaysToPay = null;
+  if (paidInvs.length > 0) {
+    const totalDays = paidInvs.reduce((sum, i) => sum + Math.max(0, (i.paidAt - i.sentAt) / 86400000), 0);
+    avgDaysToPay = totalDays / paidInvs.length;
+  }
+  let score, scoreColor, scoreBg, scoreNote;
+  if (paidInvs.length === 0) {
+    score = '—'; scoreColor = '#64748B'; scoreBg = '#F1F5F9';
+    scoreNote = currentLang === 'en' ? 'no paid history' : 'sin historial pagado';
+  } else if (avgDaysToPay <= 7 && ccCount === 0) {
+    score = 'A'; scoreColor = '#15803D'; scoreBg = '#DCFCE7';
+    scoreNote = currentLang === 'en' ? 'fast payer' : 'paga rápido';
+  } else if (avgDaysToPay <= 30 && ccCount <= 1) {
+    score = 'B'; scoreColor = '#CA8A04'; scoreBg = '#FEF9C3';
+    scoreNote = currentLang === 'en' ? 'average' : 'promedio';
+  } else {
+    score = 'C'; scoreColor = '#B91C1C'; scoreBg = '#FEE2E2';
+    scoreNote = currentLang === 'en' ? 'slow / problematic' : 'lento / problemático';
+  }
+  
+  // ─── LTV (Lifetime Value) — total invoiced ever for this customer ───
+  const ltv = totalSent + totalPaid;
+  const firstService = invs.length > 0 ? Math.min(...invs.map(i => i.createdAt || Date.now())) : Date.now();
+  const yearsCustomer = Math.max(1, Math.round((Date.now() - firstService) / (365 * 86400000) * 10) / 10);
+  
   document.getElementById('cdSummaryRow').innerHTML = `
-    <div class="cd-summary-card"><div class="cd-summary-label">Total facturado</div><div class="cd-summary-value">${fmtCurrency(totalSent + totalPaid)}</div></div>
-    <div class="cd-summary-card success"><div class="cd-summary-label">Cobrado</div><div class="cd-summary-value">${fmtCurrency(totalPaid)}</div></div>
-    <div class="cd-summary-card ${pendingAmt > 0 ? 'warn' : ''}"><div class="cd-summary-label">Pendiente cobro</div><div class="cd-summary-value">${fmtCurrency(pendingAmt)}</div></div>
-    <div class="cd-summary-card ${ccCount > 0 ? 'danger' : ''}"><div class="cd-summary-label">Alertas CC</div><div class="cd-summary-value">${ccCount}</div></div>
+    <div class="cd-summary-card" style="background:${scoreBg};border:2px solid ${scoreColor}40;">
+      <div class="cd-summary-label">${currentLang === 'en' ? 'Pay score' : 'Score pago'}</div>
+      <div class="cd-summary-value" style="color:${scoreColor};font-size:32px;">${score}</div>
+      <div style="font-size:10px;color:${scoreColor};margin-top:-4px;">${escapeHtml(scoreNote)}</div>
+      ${avgDaysToPay !== null ? `<div style="font-size:10px;color:var(--text-mute);margin-top:2px;">${currentLang === 'en' ? 'avg' : 'prom'} ${Math.round(avgDaysToPay)}d</div>` : ''}
+    </div>
+    <div class="cd-summary-card"><div class="cd-summary-label">${currentLang === 'en' ? 'Lifetime value' : 'Valor histórico'}</div><div class="cd-summary-value">${fmtCurrency(ltv)}</div><div style="font-size:10px;color:var(--text-mute);margin-top:2px;">${invs.length} ${currentLang === 'en' ? 'services' : 'servicios'} · ${yearsCustomer}y</div></div>
+    <div class="cd-summary-card success"><div class="cd-summary-label">${currentLang === 'en' ? 'Collected' : 'Cobrado'}</div><div class="cd-summary-value">${fmtCurrency(totalPaid)}</div></div>
+    <div class="cd-summary-card ${pendingAmt > 0 ? 'warn' : ''}"><div class="cd-summary-label">${currentLang === 'en' ? 'Pending' : 'Pendiente'}</div><div class="cd-summary-value">${fmtCurrency(pendingAmt)}</div></div>
+    <div class="cd-summary-card ${ccCount > 0 ? 'danger' : ''}"><div class="cd-summary-label">${currentLang === 'en' ? 'CC alerts' : 'Alertas CC'}</div><div class="cd-summary-value">${ccCount}</div></div>
   `;
 
   // Contact + spa grid
@@ -7203,6 +7403,7 @@ function renderInvoiceCardHtml(inv) {
   
   return `
     <div class="invoice-card${urgentCls}${snoozedCls}">
+      ${bulkMode ? `<input type="checkbox" data-bulk-id="${inv.id}" onclick="event.stopPropagation();window.toggleBulkSelect('${inv.id}')" ${bulkSelectedIds.has(inv.id) ? 'checked' : ''} style="width:18px;height:18px;margin-right:8px;cursor:pointer;accent-color:#0284C7;">` : ''}
       <div class="invoice-status ${s}"></div>
       <div class="invoice-main">
         <div class="invoice-title">
@@ -7468,6 +7669,186 @@ function renderSentTodayView() {
 // ════════════════════════════════════════════════════════════
 // UNCONFIRMED ALERTS BANNER — shows when there are alerts >24h old not confirmed
 // ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// TECHS PERFORMANCE DASHBOARD — per-technician stats
+// ════════════════════════════════════════════════════════════
+function renderTechsView() {
+  const list = document.getElementById('invoiceList');
+  const en = currentLang === 'en';
+  
+  // Aggregate stats per tech
+  const techMap = new Map();
+  allInvoices.forEach(inv => {
+    const tech = (inv.technician || (en ? '(no tech)' : '(sin técnico)')).trim();
+    if (!techMap.has(tech)) techMap.set(tech, {
+      tech, count: 0, totalInvoiced: 0, totalCollected: 0, totalPending: 0,
+      ccIssues: 0, fastestPaid: Infinity, avgDaysToPay: 0, daysSum: 0, paidCount: 0
+    });
+    const t = techMap.get(tech);
+    const amt = inv.amount || 0;
+    const status = deriveStatus(inv);
+    t.count++;
+    t.totalInvoiced += amt;
+    if (status === 'paid') {
+      t.totalCollected += amt;
+      if (inv.sentAt && inv.paidAt) {
+        const days = Math.max(0, (inv.paidAt - inv.sentAt) / 86400000);
+        t.daysSum += days;
+        t.paidCount++;
+        if (days < t.fastestPaid) t.fastestPaid = days;
+      }
+    } else if (status !== 'pending') {
+      t.totalPending += amt;
+    }
+    if (inv.paymentReason && status !== 'paid') t.ccIssues++;
+  });
+  
+  techMap.forEach(t => {
+    if (t.paidCount > 0) t.avgDaysToPay = Math.round(t.daysSum / t.paidCount);
+  });
+  
+  const techs = Array.from(techMap.values()).sort((a, b) => b.totalInvoiced - a.totalInvoiced);
+  
+  if (techs.length === 0) {
+    list.innerHTML = `<div class="empty"><div class="empty-icon">👷</div><div class="empty-title">${en ? 'No technicians yet' : 'Sin técnicos aún'}</div></div>`;
+    return;
+  }
+  
+  // Render leaderboard
+  const maxInvoiced = Math.max(...techs.map(t => t.totalInvoiced), 1);
+  let html = `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-soft);margin-bottom:12px;">${en ? 'Tech Leaderboard — sorted by revenue' : 'Leaderboard de Técnicos — ordenado por revenue'}</div>`;
+  
+  techs.forEach((t, i) => {
+    const collectionRate = t.totalInvoiced > 0 ? Math.round((t.totalCollected / t.totalInvoiced) * 100) : 0;
+    const barPct = (t.totalInvoiced / maxInvoiced) * 100;
+    const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : `#${i + 1}`));
+    
+    html += `<div style="background:white;border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <span style="font-size:20px;">${medal}</span>
+        <div style="flex:1;">
+          <div style="font-size:15px;font-weight:700;color:var(--text);">👷 ${escapeHtml(t.tech)}</div>
+          <div style="font-size:11px;color:var(--text-mute);">${t.count} ${en ? (t.count === 1 ? 'service' : 'services') : (t.count === 1 ? 'servicio' : 'servicios')}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:18px;font-weight:800;font-family:'SF Mono',ui-monospace,monospace;color:var(--text);">${fmtCurrency(t.totalInvoiced)}</div>
+          <div style="font-size:10px;color:var(--text-mute);">${en ? 'invoiced total' : 'facturado total'}</div>
+        </div>
+      </div>
+      <div style="height:6px;background:#F1F5F9;border-radius:3px;overflow:hidden;margin-bottom:10px;">
+        <div style="height:100%;width:${barPct}%;background:linear-gradient(90deg,#15803D,#22C55E);border-radius:3px;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:11px;">
+        <div style="background:#DCFCE7;padding:6px 10px;border-radius:6px;">
+          <div style="color:#15803D;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.06em;">${en ? 'Collected' : 'Cobrado'}</div>
+          <div style="font-size:13px;font-weight:700;color:#0F172A;">${fmtCurrency(t.totalCollected)}</div>
+          <div style="font-size:10px;color:#15803D;">${collectionRate}% ${en ? 'rate' : 'tasa'}</div>
+        </div>
+        <div style="background:#FEF9C3;padding:6px 10px;border-radius:6px;">
+          <div style="color:#854D0E;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.06em;">${en ? 'Pending' : 'Pendiente'}</div>
+          <div style="font-size:13px;font-weight:700;color:#0F172A;">${fmtCurrency(t.totalPending)}</div>
+        </div>
+        <div style="background:${t.ccIssues > 0 ? '#FEE2E2' : '#F1F5F9'};padding:6px 10px;border-radius:6px;">
+          <div style="color:${t.ccIssues > 0 ? '#991B1B' : '#475569'};font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.06em;">${en ? 'CC Issues' : 'Alertas CC'}</div>
+          <div style="font-size:13px;font-weight:700;color:#0F172A;">${t.ccIssues}</div>
+        </div>
+        <div style="background:#DBEAFE;padding:6px 10px;border-radius:6px;">
+          <div style="color:#1E40AF;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.06em;">${en ? 'Avg pay' : 'Pago prom'}</div>
+          <div style="font-size:13px;font-weight:700;color:#0F172A;">${t.paidCount > 0 ? t.avgDaysToPay + 'd' : '—'}</div>
+        </div>
+      </div>
+    </div>`;
+  });
+  
+  list.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════
+// TODAY'S REVENUE + 7-DAY MINI CHART
+// ════════════════════════════════════════════════════════════
+function renderTodayRevenue() {
+  const card = document.getElementById('todayRevenueCard');
+  if (!card) return;
+  
+  // Calculate revenue per day for last 7 days (using createdAt)
+  const dayBuckets = []; // [{ label, total, count, ts }]
+  const now = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    d.setHours(0, 0, 0, 0);
+    const start = d.getTime();
+    const end = start + 86400000;
+    let total = 0, count = 0;
+    allInvoices.forEach(inv => {
+      const created = inv.createdAt || 0;
+      if (created >= start && created < end) {
+        total += (inv.amount || 0);
+        count++;
+      }
+    });
+    dayBuckets.push({ start, total, count, label: d.toLocaleDateString('en-US', { weekday: 'short' }) });
+  }
+  
+  const today = dayBuckets[6];
+  const yesterday = dayBuckets[5];
+  const todayTotal = today.total;
+  const yesterdayTotal = yesterday.total;
+  
+  // Show card only if there's any activity in last 7 days
+  const anyActivity = dayBuckets.some(d => d.count > 0);
+  if (!anyActivity) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+  
+  document.getElementById('todayRevAmount').textContent = fmtCurrency(todayTotal);
+  document.getElementById('todayRevCount').textContent = `${today.count} ${currentLang === 'en' ? (today.count === 1 ? 'invoice' : 'invoices') : (today.count === 1 ? 'factura' : 'facturas')}`;
+  document.getElementById('yesterdayRevAmount').textContent = fmtCurrency(yesterdayTotal);
+  document.getElementById('yesterdayRevCount').textContent = `${yesterday.count} ${currentLang === 'en' ? (yesterday.count === 1 ? 'invoice' : 'invoices') : (yesterday.count === 1 ? 'factura' : 'facturas')}`;
+  
+  // Delta vs yesterday
+  const deltaEl = document.getElementById('todayRevDelta');
+  if (yesterdayTotal > 0) {
+    const pct = Math.round(((todayTotal - yesterdayTotal) / yesterdayTotal) * 100);
+    if (pct > 0) {
+      deltaEl.textContent = `↑ +${pct}%`;
+      deltaEl.style.color = '#86EFAC';
+    } else if (pct < 0) {
+      deltaEl.textContent = `↓ ${pct}%`;
+      deltaEl.style.color = '#FCA5A5';
+    } else {
+      deltaEl.textContent = `= ${pct}%`;
+      deltaEl.style.color = '#CBD5E1';
+    }
+  } else if (todayTotal > 0) {
+    deltaEl.textContent = currentLang === 'en' ? '↑ NEW' : '↑ NUEVO';
+    deltaEl.style.color = '#86EFAC';
+  } else {
+    deltaEl.textContent = '';
+  }
+  
+  // 7-day mini bar chart
+  const chart = document.getElementById('weeklyMiniChart');
+  const maxDay = Math.max(...dayBuckets.map(d => d.total), 1);
+  chart.innerHTML = dayBuckets.map((d, i) => {
+    const heightPct = Math.max((d.total / maxDay) * 100, 2);
+    const isToday = i === 6;
+    const bg = isToday ? '#22C55E' : (d.total > 0 ? '#94A3B8' : '#475569');
+    const tooltip = `${d.label}: ${fmtCurrency(d.total)} (${d.count})`;
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;" title="${escapeHtml(tooltip)}">
+      <div style="width:100%;height:32px;display:flex;align-items:flex-end;">
+        <div style="width:100%;height:${heightPct}%;background:${bg};border-radius:3px 3px 0 0;${isToday ? 'box-shadow:0 -2px 8px rgba(34,197,94,0.4);' : ''}"></div>
+      </div>
+      <div style="font-size:9px;font-weight:600;color:${isToday ? '#86EFAC' : '#94A3B8'};text-transform:uppercase;letter-spacing:0.04em;">${d.label.slice(0, 3)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════
+// UNCONFIRMED ALERTS BANNER — shows when there are alerts >24h old not confirmed
+// ════════════════════════════════════════════════════════════
 function updateUnconfirmedBanner() {
   const banner = document.getElementById('unconfirmedBanner');
   if (!banner) return;
@@ -7502,6 +7883,162 @@ window.viewUnconfirmed = function() {
 // Generates a CSV in QuickBooks Receive Payment import format.
 // Headers compatible with QB import wizard:
 //   Customer, Invoice #, Amount, Date, Payment Method, Reference No, Memo
+// ════════════════════════════════════════════════════════════
+// BULK SEND MODE — generate multiple .eml at once
+// ════════════════════════════════════════════════════════════
+let bulkMode = false;
+let bulkSelectedIds = new Set();
+
+window.toggleBulkMode = function() {
+  bulkMode = !bulkMode;
+  bulkSelectedIds.clear();
+  const btn = document.getElementById('bulkToggleBtn');
+  if (btn) {
+    btn.textContent = bulkMode 
+      ? (currentLang === 'en' ? '✕ Exit bulk' : '✕ Salir bulk') 
+      : (currentLang === 'en' ? '📦 Bulk send' : '📦 Bulk send');
+    btn.style.background = bulkMode ? '#0284C7' : '';
+    btn.style.color = bulkMode ? 'white' : '';
+  }
+  renderInvoices();
+  let bar = document.getElementById('bulkActionBar');
+  if (bulkMode) {
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'bulkActionBar';
+      bar.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0F172A;color:white;padding:14px 20px;border-radius:14px;display:flex;align-items:center;gap:14px;z-index:999;box-shadow:0 12px 40px rgba(0,0,0,0.35);';
+      document.body.appendChild(bar);
+    }
+    updateBulkBar();
+  } else {
+    if (bar) bar.remove();
+  }
+};
+
+window.toggleBulkSelect = function(id) {
+  if (bulkSelectedIds.has(id)) bulkSelectedIds.delete(id);
+  else bulkSelectedIds.add(id);
+  updateBulkBar();
+};
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulkActionBar');
+  if (!bar) return;
+  const count = bulkSelectedIds.size;
+  const en = currentLang === 'en';
+  bar.innerHTML = `
+    <div style="font-size:14px;font-weight:600;">${count} ${en ? 'selected' : 'seleccionadas'}</div>
+    <button onclick="bulkGenerateEml()" ${count === 0 ? 'disabled' : ''} style="background:#22C55E;color:white;border:0;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:${count === 0 ? 'not-allowed' : 'pointer'};opacity:${count === 0 ? '0.5' : '1'};">📎 ${en ? 'Generate ' : 'Generar '}${count} .eml</button>
+    <button onclick="toggleBulkMode()" style="background:#475569;color:white;border:0;padding:10px 14px;border-radius:8px;font-size:13px;cursor:pointer;">${en ? 'Cancel' : 'Cancelar'}</button>`;
+}
+
+window.bulkGenerateEml = function() {
+  if (bulkSelectedIds.size === 0) return;
+  const en = currentLang === 'en';
+  const ids = Array.from(bulkSelectedIds);
+  if (!confirm(en
+    ? `Generate ${ids.length} .eml files? They will all download to your Downloads folder.`
+    : `¿Generar ${ids.length} archivos .eml? Se descargarán a Downloads.`)) return;
+  
+  let i = 0;
+  const interval = setInterval(() => {
+    if (i >= ids.length) {
+      clearInterval(interval);
+      toast(en ? `✓ ${ids.length} .eml files generated` : `✓ ${ids.length} archivos .eml generados`, 'success');
+      bulkSelectedIds.clear();
+      toggleBulkMode();
+      return;
+    }
+    const inv = allInvoices.find(x => x.id === ids[i]);
+    if (inv) {
+      const stage = suggestEmailStage(inv);
+      const pdfBase64 = inv.pdfBase64 || null;
+      const pdfFilename = inv.pdfFilename || `Invoice_${inv.invoiceNumber}.pdf`;
+      const emlContent = buildEmlFile(inv, pdfBase64, pdfFilename, stage);
+      const blob = new Blob([emlContent], { type: 'message/rfc822' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const stageSuffix = stage === 1 ? '' : (stage === 2 ? '_reminder' : (stage === 3 ? '_pastdue' : '_receipt'));
+      a.download = `Invoice_${inv.invoiceNumber}_for_${(inv.customerName || 'customer').replace(/[^a-zA-Z0-9]/g, '_')}${stageSuffix}.eml`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    i++;
+  }, 400);
+};
+
+// ════════════════════════════════════════════════════════════
+// WEEKLY REPORT — Multi-section CSV for Tom & Sam
+// Opens in Excel; includes summary, by-tech, and pending lists
+// ════════════════════════════════════════════════════════════
+window.exportWeeklyReport = function() {
+  const en = currentLang === 'en';
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setDate(weekStart.getDate() - 6);
+  weekStart.setHours(0, 0, 0, 0);
+  
+  const weekInvoices = allInvoices.filter(i => (i.createdAt || 0) >= weekStart.getTime());
+  
+  let csv = `${en ? 'Aspen Spas — Weekly Report' : 'Aspen Spas — Reporte Semanal'}\r\n`;
+  csv += `${en ? 'Period' : 'Período'}: ${weekStart.toLocaleDateString()} - ${now.toLocaleDateString()}\r\n`;
+  csv += `${en ? 'Generated' : 'Generado'}: ${now.toLocaleString()}\r\n\r\n`;
+  
+  const totalInvoiced = weekInvoices.reduce((s, i) => s + (i.amount || 0), 0);
+  const totalPaid = weekInvoices.filter(i => deriveStatus(i) === 'paid').reduce((s, i) => s + (i.amount || 0), 0);
+  const totalPending = totalInvoiced - totalPaid;
+  const ccIssues = weekInvoices.filter(i => i.paymentReason && deriveStatus(i) !== 'paid').length;
+  
+  csv += `=== ${en ? 'SUMMARY' : 'RESUMEN'} ===\r\n`;
+  csv += `${en ? 'Metric' : 'Métrica'},${en ? 'Value' : 'Valor'}\r\n`;
+  csv += `${en ? 'Total invoices' : 'Total facturas'},${weekInvoices.length}\r\n`;
+  csv += `${en ? 'Total invoiced' : 'Total facturado'},$${totalInvoiced.toFixed(2)}\r\n`;
+  csv += `${en ? 'Total collected' : 'Total cobrado'},$${totalPaid.toFixed(2)}\r\n`;
+  csv += `${en ? 'Total pending' : 'Total pendiente'},$${totalPending.toFixed(2)}\r\n`;
+  csv += `${en ? 'Collection rate' : 'Tasa cobranza'},${totalInvoiced > 0 ? Math.round(totalPaid / totalInvoiced * 100) : 0}%\r\n`;
+  csv += `${en ? 'CC issues' : 'Alertas CC'},${ccIssues}\r\n\r\n`;
+  
+  csv += `=== ${en ? 'BY TECHNICIAN' : 'POR TÉCNICO'} ===\r\n`;
+  csv += `${en ? 'Tech' : 'Técnico'},${en ? '#Invoices' : '#Facturas'},${en ? 'Invoiced' : 'Facturado'},${en ? 'Collected' : 'Cobrado'},${en ? 'Pending' : 'Pendiente'},${en ? 'CC issues' : 'Alertas CC'}\r\n`;
+  const techMap = new Map();
+  weekInvoices.forEach(inv => {
+    const tech = inv.technician || (en ? '(none)' : '(ninguno)');
+    if (!techMap.has(tech)) techMap.set(tech, { count: 0, invoiced: 0, paid: 0, pending: 0, cc: 0 });
+    const t = techMap.get(tech);
+    t.count++;
+    t.invoiced += inv.amount || 0;
+    if (deriveStatus(inv) === 'paid') t.paid += inv.amount || 0;
+    else t.pending += inv.amount || 0;
+    if (inv.paymentReason && deriveStatus(inv) !== 'paid') t.cc++;
+  });
+  Array.from(techMap.entries()).sort((a, b) => b[1].invoiced - a[1].invoiced).forEach(([tech, t]) => {
+    csv += `${tech},${t.count},$${t.invoiced.toFixed(2)},$${t.paid.toFixed(2)},$${t.pending.toFixed(2)},${t.cc}\r\n`;
+  });
+  csv += '\r\n';
+  
+  csv += `=== ${en ? 'PENDING / NEEDS ATTENTION' : 'PENDIENTES / ATENCIÓN'} ===\r\n`;
+  csv += `${en ? 'Invoice' : 'Factura'},${en ? 'Customer' : 'Cliente'},${en ? 'Amount' : 'Monto'},${en ? 'Status' : 'Estado'},${en ? 'Tech' : 'Técnico'},${en ? 'Service Date' : 'Fecha'},${en ? 'Reason' : 'Razón'}\r\n`;
+  weekInvoices.filter(i => deriveStatus(i) !== 'paid').sort((a, b) => (b.amount || 0) - (a.amount || 0)).forEach(inv => {
+    const reason = inv.paymentReason ? paymentReasonLabel(inv.paymentReason).replace(/[^\w\s]/g, '').trim() : '';
+    csv += `${inv.invoiceNumber},"${(inv.customerName || '').replace(/"/g, '""')}",$${(inv.amount || 0).toFixed(2)},${deriveStatus(inv)},${inv.technician || ''},${inv.serviceDate || ''},${reason}\r\n`;
+  });
+  
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Aspen_Weekly_Report_${weekStart.toISOString().slice(0, 10)}_to_${now.toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  
+  toast(en ? '📑 Weekly report downloaded — open in Excel' : '📑 Reporte semanal descargado — abre en Excel', 'success');
+};
+
 window.exportQbCsv = function() {
   const paid = allInvoices.filter(i => deriveStatus(i) === 'paid' && i.paymentMethod);
   if (paid.length === 0) {
