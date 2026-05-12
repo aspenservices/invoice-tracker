@@ -2080,6 +2080,8 @@ const I18N = {
     'form.customer.greetingHint': 'Vacío = se autocompleta',
     'form.customer.email': 'Email del cliente',
     'form.customer.email.optional': '(opcional — déjalo vacío si no tiene)',
+    'form.customer.phone': '📱 Teléfono',
+    'form.customer.phone.optional': '(opcional — para enviar por iMessage)',
     'form.customer.emailPlaceholder': 'cliente@email.com',
     'form.serviceDate': 'Fecha de servicio',
     'form.technician': 'Técnico',
@@ -2286,6 +2288,8 @@ const I18N = {
     'form.customer.greetingHint': 'Empty = auto-filled',
     'form.customer.email': 'Customer email',
     'form.customer.email.optional': '(optional — leave empty if customer has no email)',
+    'form.customer.phone': '📱 Phone',
+    'form.customer.phone.optional': '(optional — for iMessage send)',
     'form.customer.emailPlaceholder': 'customer@email.com',
     'form.serviceDate': 'Service date',
     'form.technician': 'Technician',
@@ -2641,16 +2645,39 @@ async function autoCreateCustomerFromInvoice(invoiceData) {
 
 function findCustomerByName(name) {
   if (!name) return null;
-  const norm = name.trim().toLowerCase();
-  // Exact match first
-  let m = allCustomers.find(c => (c.name || '').trim().toLowerCase() === norm);
-  if (m) return m;
-  // Comma-flipped match: "Bailey, Meghan" vs "Meghan Bailey"
-  if (norm.includes(',')) {
-    const flipped = norm.split(',').map(s => s.trim()).reverse().join(' ').replace(/\s+/g, ' ');
-    m = allCustomers.find(c => (c.name || '').trim().toLowerCase().replace(/,/g, '').replace(/\s+/g, ' ') === flipped);
-    if (m) return m;
+  const norm = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const flipComma = (s) => s.includes(',') ? s.split(',').map(t => t.trim()).reverse().join(' ').replace(/\s+/g, ' ') : null;
+  
+  const searchNorm = norm(name);
+  const searchFlipped = flipComma(searchNorm); // if search has comma, flip it
+  
+  // Try matching against each customer in multiple formats
+  for (const c of allCustomers) {
+    const custNorm = norm(c.name);
+    if (!custNorm) continue;
+    const custFlipped = flipComma(custNorm); // if customer has comma, flip it
+    const custNoComma = custNorm.replace(/,/g, '').replace(/\s+/g, ' ');
+    
+    // Try all combinations
+    if (custNorm === searchNorm) return c;
+    if (custNoComma === searchNorm) return c;
+    if (searchFlipped && custNorm === searchFlipped) return c;
+    if (searchFlipped && custNoComma === searchFlipped) return c;
+    if (custFlipped && custFlipped === searchNorm) return c;
+    if (custFlipped && searchFlipped && custFlipped === searchFlipped) return c;
   }
+  
+  // Fallback: token-based match (all tokens of search appear in customer name)
+  const searchTokens = searchNorm.split(/[\s,&]+/).filter(t => t.length >= 2);
+  if (searchTokens.length >= 2) {
+    for (const c of allCustomers) {
+      const custNoComma = norm(c.name).replace(/,/g, '').replace(/\s+/g, ' ');
+      const custTokens = new Set(custNoComma.split(/[\s,&]+/).filter(t => t.length >= 2));
+      const allMatch = searchTokens.every(t => custTokens.has(t));
+      if (allMatch) return c;
+    }
+  }
+  
   return null;
 }
 
@@ -3966,14 +3993,33 @@ function applyExtractedFields(extracted) {
   }
   if (extracted.customerName && !document.getElementById('fCustomerName').value) {
     document.getElementById('fCustomerName').value = extracted.customerName;
-    // Si ese cliente ya existe, autocompletar email
+    // Try to find existing customer (with comma-flip + token matching)
     const existing = findCustomerByName(extracted.customerName);
     if (existing) {
+      // ALSO use the existing customer's full name (preserves "Voss, Francine" format from DB)
+      document.getElementById('fCustomerName').value = existing.name || extracted.customerName;
       if (existing.email) document.getElementById('fCustomerEmail').value = existing.email;
       if (existing.phone) document.getElementById('fCustomerPhone').value = existing.phone;
       if (existing.greetingName) document.getElementById('fGreetingName').value = existing.greetingName;
       if (existing.spaModel && !document.getElementById('fSpaModel').value) document.getElementById('fSpaModel').value = existing.spaModel;
       if (existing.serialNumber && !document.getElementById('fSerial').value) document.getElementById('fSerial').value = existing.serialNumber;
+      // Visual confirmation that customer was matched
+      const banner = document.getElementById('extractedBanner');
+      if (banner) {
+        const matchedFields = [];
+        if (existing.email) matchedFields.push('email');
+        if (existing.phone) matchedFields.push(currentLang === 'en' ? 'phone' : 'teléfono');
+        if (existing.greetingName) matchedFields.push(currentLang === 'en' ? 'greeting' : 'saludo');
+        if (existing.spaModel) matchedFields.push(currentLang === 'en' ? 'spa model' : 'modelo');
+        if (existing.serialNumber) matchedFields.push('S/N');
+        if (matchedFields.length > 0) {
+          // Append to existing PDF banner with a 2nd row showing customer match
+          const matchRow = document.createElement('div');
+          matchRow.style.cssText = 'margin-top:6px;padding:6px 10px;background:#DBEAFE;border:1px solid #93C5FD;border-radius:6px;color:#1E40AF;font-size:12px;font-weight:600;';
+          matchRow.innerHTML = `👤 ${currentLang === 'en' ? 'Customer matched' : 'Cliente encontrado'}: <strong>${escapeHtml(existing.name)}</strong> — ${currentLang === 'en' ? 'auto-filled' : 'auto-rellené'}: ${matchedFields.join(', ')}`;
+          banner.appendChild(matchRow);
+        }
+      }
     }
   }
   if (extracted.serviceDate && !document.getElementById('fServiceDate').value) {
