@@ -6617,6 +6617,73 @@ window.notifyDepositTeam = async function() {
   const newHistory = [...(inv.history || []), histEntry];
   await updateInvoiceData(inv.id, { history: newHistory });
   
+  // Also publish to TECH-TICKETS so the tech team sees the check-pending status
+  // when they go to service this customer. Auto-prompt — user can decline.
+  try {
+    const publishedBy = getInvoiceTrackerUser();
+    if (publishedBy) {
+      const locLabel = en
+        ? { with_tech: 'with tech', office: 'in office', other: 'other' }[checkLocation] || checkLocation
+        : { with_tech: 'con técnico', office: 'en oficina', other: 'otro' }[checkLocation] || checkLocation;
+      const techLabel = inv.technician ? (en ? ` (${inv.technician})` : ` (${inv.technician})`) : '';
+      const confirmMsg = en
+        ? `Also alert TECH-TICKETS about this check pending deposit?\n\nCustomer: ${inv.customerName}\nLocation: ${locLabel}${techLabel}\nAmount: $${Number(inv.amount).toFixed(2)}\n\nThe tech team will see it when they go service this customer.${pdfBase64 ? '\n\n📎 Invoice PDF will be attached.' : ''}`
+        : `¿Alertar también a TECH-TICKETS sobre este cheque sin depositar?\n\nCliente: ${inv.customerName}\nUbicación: ${locLabel}${techLabel}\nMonto: $${Number(inv.amount).toFixed(2)}\n\nEl tech team lo verá cuando vaya a dar servicio a este cliente.${pdfBase64 ? '\n\n📎 El PDF de la factura se adjuntará.' : ''}`;
+      if (confirm(confirmMsg)) {
+        const payload = {
+          invoiceNumber: inv.invoiceNumber,
+          amount: Number(inv.amount) || 0,
+          reason: 'check_pending_deposit',
+          reasonLabel: en ? `Check pending deposit (${locLabel})` : `Cheque sin depositar (${locLabel})`,
+          customerEmail: inv.customerEmail || '',
+          customerPhone: inv.customerPhone || '',
+          technician: inv.technician || '',
+          checkLocation: checkLocation || null,
+          checkRef: checkRef || null,
+          invoiceCreatedAt: inv.createdAt || null,
+          invoiceSentAt: inv.sentAt || null,
+          note: null
+        };
+        // Attach PDF if it fits (600 KB guard, same as the regular Alert Tech flow)
+        if (inv.pdfBase64 && inv.pdfBase64.length <= 600 * 1024) {
+          payload.pdfBase64 = inv.pdfBase64;
+          payload.pdfFilename = (inv.invoiceNumber ? `Invoice-${inv.invoiceNumber}` : 'Invoice') + '.pdf';
+        }
+        try {
+          const result = await publishCrossAppEvent({
+            eventType: 'payment_alert',
+            customerName: inv.customerName,
+            payload,
+            severity: 'warn',
+            createdBy: publishedBy
+          });
+          // Stamp history with this second event so we can detect resolution + show badge
+          const eventId = result && result.name ? result.name.split('/').pop() : null;
+          const ttHist = {
+            action: 'crossapp_alert_published',
+            ts: Date.now(),
+            severity: 'warn',
+            eventId,
+            note: null,
+            pdfAttached: !!payload.pdfBase64,
+            recipient: 'TECH-TICKETS',
+            recipientName: 'Tech Team',
+            reason: 'check_pending_deposit',
+            publishedBy,
+            confirmed: true,
+            confirmedAt: Date.now()
+          };
+          inv.history = [...(inv.history || []), ttHist];
+          await updateInvoiceData(inv.id, { history: inv.history });
+          toast(en ? '🔔 Also alerted TECH-TICKETS' : '🔔 También alertado a TECH-TICKETS', 'success');
+        } catch (e) {
+          console.warn('[alert_check → tech-tickets]', e);
+          toast(en ? 'Tech alert failed: ' + e.message : 'Falló alert a tech: ' + e.message, 'error');
+        }
+      }
+    }
+  } catch (_e) { /* non-fatal */ }
+  
   // After download, ask if she actually clicked Send in Outlook
   setTimeout(() => askConfirmSend(inv.id, newHistory.length - 1), 600);
   
@@ -7084,6 +7151,128 @@ async function publishCrossAppEvent({ eventType, customerName, payload, severity
   const data = await res.json();
   console.info('[CrossAppEvent] Published', eventType, 'for', customerName, '→', data.name?.split('/').pop());
   return data;
+}
+
+// Firestore REST value unwrapper — converts Firestore format back to plain JS
+function _firestoreUnwrap(fields) {
+  if (!fields) return {};
+  const out = {};
+  for (const k of Object.keys(fields)) {
+    const v = fields[k];
+    if (v.stringValue !== undefined) out[k] = v.stringValue;
+    else if (v.integerValue !== undefined) out[k] = parseInt(v.integerValue, 10);
+    else if (v.doubleValue !== undefined) out[k] = v.doubleValue;
+    else if (v.booleanValue !== undefined) out[k] = v.booleanValue;
+    else if (v.timestampValue !== undefined) out[k] = v.timestampValue;
+    else if (v.nullValue !== undefined) out[k] = null;
+    else if (v.arrayValue) out[k] = (v.arrayValue.values || []).map(x => {
+      if (x.stringValue !== undefined) return x.stringValue;
+      if (x.integerValue !== undefined) return parseInt(x.integerValue, 10);
+      return x;
+    });
+    else if (v.mapValue) out[k] = _firestoreUnwrap(v.mapValue.fields);
+    else out[k] = v;
+  }
+  return out;
+}
+
+// ════════════════════════════════════════════════════════════
+// CROSS-APP RESOLVE SYNC — when TECH-TICKETS marks a cross_app_event as
+// resolved, we want Invoice Tracker to reflect that. Approach: poll every
+// 30 seconds for resolved events (only when tab is visible). For each
+// resolved event that matches one of our invoices via history.eventId,
+// stamp a `crossapp_alert_resolved` entry on that invoice so the UI can
+// show "✓ Tech resolved" instead of "Alert Tech (already sent)".
+// ════════════════════════════════════════════════════════════
+let _crossAppPollTimer = null;
+let _crossAppPollBusy = false;
+
+async function pollCrossAppResolves() {
+  if (document.hidden) return;
+  if (_crossAppPollBusy) return;
+  _crossAppPollBusy = true;
+  try {
+    const token = await getTicketsAuthToken();
+    const cfg = getTicketsDbConfig();
+    // Query resolved events. Limit to 100 most recent — covers >>30s polling window.
+    const url = `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents:runQuery?key=${cfg.apiKey}`;
+    const body = {
+      structuredQuery: {
+        from: [{ collectionId: 'cross_app_events' }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: 'status' },
+            op: 'EQUAL',
+            value: { stringValue: 'resolved' }
+          }
+        },
+        orderBy: [{ field: { fieldPath: 'resolvedAt' }, direction: 'DESCENDING' }],
+        limit: 100
+      }
+    };
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) {
+      console.warn('[CrossAppPoll] HTTP', resp.status);
+      return;
+    }
+    const arr = await resp.json();
+    if (!Array.isArray(arr)) return;
+    let stampedCount = 0;
+    for (const item of arr) {
+      if (!item.document) continue;
+      const eventId = item.document.name.split('/').pop();
+      const flds = _firestoreUnwrap(item.document.fields);
+      // Find the invoice that originally generated this event
+      const inv = allInvoices.find(i =>
+        (i.history || []).some(h => h.action === 'crossapp_alert_published' && h.eventId === eventId) &&
+        !(i.history || []).some(h => h.action === 'crossapp_alert_resolved' && h.eventId === eventId)
+      );
+      if (!inv) continue;
+      // Stamp the resolution into the invoice's history
+      const histEntry = {
+        ts: Date.now(),
+        action: 'crossapp_alert_resolved',
+        eventId,
+        resolvedAt: flds.resolvedAt || null,
+        resolvedBy: flds.resolvedBy || null
+      };
+      const newHistory = [...(inv.history || []), histEntry];
+      inv.history = newHistory;
+      try {
+        if (db && typeof update === 'function') {
+          await update(ref(db, `invoices/${inv.id}`), { history: newHistory });
+        }
+        stampedCount++;
+      } catch (e) {
+        console.warn('[CrossAppPoll] Persist failed:', e);
+      }
+    }
+    if (stampedCount > 0) {
+      console.info('[CrossAppPoll] Stamped', stampedCount, 'resolution(s) from TECH-TICKETS');
+      toast((currentLang === 'en' ? '✓ ' : '✓ ') + stampedCount + (currentLang === 'en' ? ' tech alert(s) resolved' : ' alerta(s) resueltas por tech'), 'success');
+      computeAndRender();
+    }
+  } catch (e) {
+    console.warn('[CrossAppPoll]', e);
+  } finally {
+    _crossAppPollBusy = false;
+  }
+}
+
+function startCrossAppResolvePolling() {
+  if (_crossAppPollTimer) return;
+  // First poll immediately on startup
+  setTimeout(pollCrossAppResolves, 3000);
+  // Then every 30 seconds
+  _crossAppPollTimer = setInterval(pollCrossAppResolves, 30000);
+  // Also poll on tab focus (catches the case where Nela was away)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) pollCrossAppResolves();
+  });
 }
 
 let _ticketsCache = null;
@@ -8060,11 +8249,23 @@ function renderInvoiceCardHtml(inv) {
             inv.paymentReason === 'no_response' ||
             inv.paymentReason === 'partial' ||
             inv.paymentReason === 'pending' ||
-            (s === 'followup' && daysSince(inv.sentAt) >= 30)
+            (s === 'followup' && daysSince(inv.sentAt) >= 30) ||
+            // Also show for check-pending-deposit invoices (yellow status)
+            (inv.paymentMethod === 'check' && inv.checkLocation && inv.checkLocation !== 'deposited')
           );
           if (!isPaymentProblem) return '';
-          // Has this invoice already had an alert published?
-          const alreadyAlerted = (inv.history || []).some(h => h.action === 'crossapp_alert_published');
+          // Detect alert state: published / resolved / not yet alerted
+          const lastPublished = (inv.history || []).filter(h => h.action === 'crossapp_alert_published').slice(-1)[0];
+          const lastResolved = (inv.history || []).filter(h => h.action === 'crossapp_alert_resolved').slice(-1)[0];
+          const alreadyAlerted = !!lastPublished;
+          const techResolved = lastResolved && lastPublished && lastResolved.ts > lastPublished.ts;
+          // Resolved state — show green "✓ Tech resolved" pill (with who resolved it if available)
+          if (techResolved) {
+            const by = lastResolved.resolvedBy ? ' · ' + lastResolved.resolvedBy : '';
+            const en = currentLang === 'en';
+            const title = (en ? 'Tech team resolved this alert' : 'Tech team resolvió esta alerta') + by;
+            return `<button class="btn btn-sm" onclick="window.openCrossAppAlertModal('${inv.id}')" title="${escapeHtml(title)}" style="background:#DCFCE7;color:#15803D;border:1px solid #86EFAC;font-weight:600;">✓ ${escapeHtml(en ? 'Tech ack' : 'Tech ack')}</button>`;
+          }
           const title = currentLang === 'en'
             ? (alreadyAlerted ? 'Tech team already notified — click to re-send' : 'Notify Tech Team about this payment issue')
             : (alreadyAlerted ? 'Tech team ya notificado — click para reenviar' : 'Alertar a Tech Team sobre este problema de pago');
@@ -8515,7 +8716,10 @@ function updateUnconfirmedBanner() {
 window.viewUnconfirmed = function() {
   currentFilter = 'unconfirmed';
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  renderInvoices();
+  computeAndRender();
+  // Scroll to invoice list so user sees the filtered results
+  const list = document.getElementById('invoiceList');
+  if (list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 // ════════════════════════════════════════════════════════════
 // Generates a CSV in QuickBooks Receive Payment import format.
@@ -8538,7 +8742,7 @@ window.toggleBulkMode = function() {
     btn.style.background = bulkMode ? '#0284C7' : '';
     btn.style.color = bulkMode ? 'white' : '';
   }
-  renderInvoices();
+  computeAndRender();
   let bar = document.getElementById('bulkActionBar');
   if (bulkMode) {
     if (!bar) {
@@ -8806,6 +9010,7 @@ applyI18n();  // Apply current language to all data-i18n elements
 initFirebase();
 wirePaymentReasonRadios();
 updateUserPickerButton();  // Show current user (Alberto/Nela/Celia) or red "set me" state
+startCrossAppResolvePolling();  // Listen for TECH-TICKETS resolves and reflect them locally
 window.toast = toast;
 
 // Restart notif checker if it was previously enabled
