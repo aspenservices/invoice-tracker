@@ -1852,6 +1852,7 @@ Mahogany Durawood..."></textarea>
             <div class="ps-radio" data-val="cc_declined" data-i18n="payment.reason.cc_declined">❌ CC rechazada</div>
             <div class="ps-radio" data-val="no_response" data-i18n="payment.reason.no_response">🔇 Cliente no contesta</div>
             <div class="ps-radio" data-val="partial" data-i18n="payment.reason.partial">💵 Pago parcial</div>
+            <div class="ps-radio" data-val="pending" data-i18n="payment.reason.pending">⏳ Pago pendiente</div>
             <div class="ps-radio" data-val="disputed" data-i18n="payment.reason.disputed">⚠️ En disputa</div>
             <div class="ps-radio" data-val="" data-i18n="payment.reason.none">— Ninguno —</div>
           </div>
@@ -2077,6 +2078,7 @@ const I18N = {
     'payment.reason.cc_declined': '❌ CC declinada',
     'payment.reason.no_response': '🔇 Cliente no contesta',
     'payment.reason.partial': '💵 Pago parcial',
+    'payment.reason.pending': '⏳ Pago pendiente',
     'payment.reason.disputed': '⚠️ En disputa',
     'payment.reason.none': '— Ninguno —',
     'payment.cc.requested': 'Ya se le pidió el número de tarjeta',
@@ -2341,6 +2343,7 @@ const I18N = {
     'payment.reason.cc_declined': '❌ CC declined',
     'payment.reason.no_response': '🔇 Customer not responding',
     'payment.reason.partial': '💵 Partial payment',
+    'payment.reason.pending': '⏳ Pending payment',
     'payment.reason.disputed': '⚠️ Disputed',
     'payment.reason.none': '— None —',
     'payment.cc.requested': 'CC number has been requested',
@@ -5658,7 +5661,7 @@ window.openPaymentModal = function(id) {
   checkBlock.style.display = (psSelectedMethod === 'check') ? 'block' : 'none';
   
   // Populate alert history (audit trail)
-  const alertEvents = (inv.history || []).filter(h => h.action === 'alert_collections' || h.action === 'alert_check');
+  const alertEvents = (inv.history || []).filter(h => h.action === 'alert_collections' || h.action === 'alert_check' || h.action === 'crossapp_alert_published');
   const alertHistDiv = document.getElementById('psAlertHistory');
   const alertHistList = document.getElementById('psAlertHistoryList');
   if (alertEvents.length > 0) {
@@ -5667,10 +5670,12 @@ window.openPaymentModal = function(id) {
       const histIdx = (inv.history || []).indexOf(ev);
       const when = new Date(ev.ts);
       const whenStr = when.toLocaleString();
-      const icon = ev.action === 'alert_check' ? '💵' : '🚨';
+      const icon = ev.action === 'alert_check' ? '💵' : (ev.action === 'crossapp_alert_published' ? '🔔' : '🚨');
       const typeLabel = ev.action === 'alert_check'
         ? (en ? 'Check tracking alert' : 'Alerta tracking de cheque')
-        : (en ? 'Collections alert' : 'Alerta de cobros');
+        : (ev.action === 'crossapp_alert_published'
+            ? (en ? 'Tech alert' : 'Alerta a Tech Team')
+            : (en ? 'Collections alert' : 'Alerta de cobros'));
       let extra = '';
       if (ev.action === 'alert_check' && ev.location) {
         const locMap = {
@@ -5688,7 +5693,21 @@ window.openPaymentModal = function(id) {
         };
         extra = ` — ${reasonMap[ev.reason] || ev.reason}`;
       }
-      const pdfNote = ev.hasPdf ? ' 📎' : '';
+      if (ev.action === 'crossapp_alert_published') {
+        const reasonMap = {
+          cc_declined: en ? 'CC declined' : 'CC rechazada',
+          cc_needed: en ? 'No CC on file' : 'Falta CC',
+          no_response: en ? 'No response' : 'Sin respuesta',
+          disputed: en ? 'Disputed' : 'En disputa',
+          partial: en ? 'Partial payment' : 'Pago parcial',
+          pending: en ? 'Pending payment' : 'Pago pendiente'
+        };
+        const sevLabel = ev.severity === 'urgent' ? (en ? '🚨 Urgent' : '🚨 Urgente')
+                       : ev.severity === 'info' ? (en ? 'ℹ Info' : 'ℹ Info')
+                       : (en ? '⚠ Warning' : '⚠ Aviso');
+        extra = ` — ${sevLabel}${ev.reason ? ' · ' + (reasonMap[ev.reason] || ev.reason) : ''}`;
+      }
+      const pdfNote = (ev.hasPdf || ev.pdfAttached) ? ' 📎' : '';
       
       // Status badge: confirmed (green ✓ Sent) vs not confirmed (yellow ⏰ Generated)
       let statusBadge, confirmBtn = '';
@@ -5860,8 +5879,10 @@ window.openCrossAppAlertModal = function(invoiceId) {
   const sevSel = document.getElementById('caAlertSeverity');
   if (inv.paymentReason === 'cc_declined' || inv.paymentReason === 'disputed') {
     sevSel.value = 'urgent';
-  } else if (inv.paymentReason === 'no_response') {
+  } else if (inv.paymentReason === 'no_response' || inv.paymentReason === 'cc_needed') {
     sevSel.value = 'warn';
+  } else if (inv.paymentReason === 'pending' || inv.paymentReason === 'partial') {
+    sevSel.value = 'info';
   } else {
     sevSel.value = 'warn';
   }
@@ -5895,6 +5916,23 @@ window.publishCrossAppAlert = async function() {
       invoiceSentAt: inv.sentAt || null,
       note: note || null
     };
+
+    // Attach the invoice PDF if available, but guard against Firestore's 1 MiB document limit.
+    // Typical invoice PDFs are 50-150 KB original (67-200 KB base64). We cap at 600 KB base64
+    // to leave headroom for other fields and metadata.
+    let pdfAttached = false;
+    let pdfSkippedReason = null;
+    if (inv.pdfBase64) {
+      const sizeBytes = inv.pdfBase64.length; // base64 chars ≈ bytes
+      if (sizeBytes <= 600 * 1024) {
+        payload.pdfBase64 = inv.pdfBase64;
+        payload.pdfFilename = (inv.invoiceNumber ? `Invoice-${inv.invoiceNumber}` : 'Invoice') + '.pdf';
+        pdfAttached = true;
+      } else {
+        pdfSkippedReason = 'too_large';
+        console.warn('[CrossAppAlert] PDF too large (' + Math.round(sizeBytes/1024) + ' KB base64) — skipping attachment');
+      }
+    }
     
     const result = await publishCrossAppEvent({
       eventType: 'payment_alert',
@@ -5913,7 +5951,14 @@ window.publishCrossAppAlert = async function() {
       ts: Date.now(),
       severity,
       eventId,
-      note: note || null
+      note: note || null,
+      pdfAttached,
+      pdfSkippedReason,
+      recipient: 'TECH-TICKETS',
+      recipientName: 'Tech Team',
+      reason: inv.paymentReason || null,
+      confirmed: true,
+      confirmedAt: Date.now()
     };
     const newHistory = [...(inv.history || []), historyEntry];
     
@@ -7857,8 +7902,11 @@ function renderInvoiceCardHtml(inv) {
           // Cross-app alert button — shown when invoice has a payment problem the tech team should know about
           const isPaymentProblem = s !== 'paid' && (
             inv.paymentReason === 'cc_declined' ||
+            inv.paymentReason === 'cc_needed' ||
             inv.paymentReason === 'disputed' ||
             inv.paymentReason === 'no_response' ||
+            inv.paymentReason === 'partial' ||
+            inv.paymentReason === 'pending' ||
             (s === 'followup' && daysSince(inv.sentAt) >= 30)
           );
           if (!isPaymentProblem) return '';
