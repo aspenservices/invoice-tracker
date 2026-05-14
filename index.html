@@ -1109,6 +1109,7 @@ input.field-err, textarea.field-err, select.field-err {
         <span class="connection-dot" id="connDot"></span>
         <span id="connText">…</span>
       </div>
+      <button class="icon-btn" id="userPickerBtn" onclick="window.openUserPicker()" title="Who's using this — used for alert attribution" style="font-weight:700;font-size:11px;letter-spacing:0.05em;width:auto;padding:0 12px;background:var(--accent-soft);color:var(--accent);border-color:var(--accent);">👤</button>
       <button class="icon-btn" id="langBtn" onclick="toggleLang()" data-i18n="header.lang" data-i18n-title="header.lang.title" style="font-weight:700;font-size:11px;letter-spacing:0.05em;width:auto;padding:0 10px;">EN</button>
       <button class="icon-btn" id="notifBtn" onclick="window.openNotifPanel()" data-i18n-title="header.notif.title">🔕</button>
       <button class="icon-btn" onclick="openSettingsModal()" data-i18n-title="header.settings">⚙</button>
@@ -1913,6 +1914,22 @@ Mahogany Durawood..."></textarea>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('crossAppAlertModal')" data-i18n="form.cancel">Cancelar</button>
       <button class="btn btn-primary" onclick="window.publishCrossAppAlert()" id="caAlertPublishBtn" data-i18n="crossapp.alert.publish">🔔 Publicar alerta</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ USER PICKER ══ Who is operating Invoice Tracker right now? -->
+<div class="modal-backdrop" id="userPickerModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">👤 <span data-i18n="user.picker.title">¿Quién está usando esta app?</span></h3>
+      <button class="modal-close" onclick="closeModal('userPickerModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-soft);margin:0 0 14px;" data-i18n="user.picker.intro">
+        Cuando publiques alertas, tu nombre aparecerá en el audit trail de TECH-TICKETS y en el modal de Payment status. Selecciona quién eres ahora.
+      </p>
+      <div id="userPickerList" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
   </div>
 </div>
@@ -3410,6 +3427,22 @@ window.saveInvoice = async function() {
   
   // Clear any previous error banner
   document.getElementById('formErrorMsg').style.display = 'none';
+  
+  // Duplicate detection — when creating NEW (not editing), warn if invoice # already exists
+  // Prevents Alberto from accidentally creating duplicate invoices with the same number
+  if (!editingId && data.invoiceNumber) {
+    const existing = allInvoices.find(i => String(i.invoiceNumber).trim() === String(data.invoiceNumber).trim());
+    if (existing) {
+      const en = currentLang === 'en';
+      const msg = en
+        ? `Invoice #${data.invoiceNumber} already exists (${existing.customerName}). Continue creating a duplicate, or cancel and edit the existing one?`
+        : `La factura #${data.invoiceNumber} ya existe (${existing.customerName}). ¿Crear duplicada de todos modos, o cancelar y editar la existente?`;
+      if (!confirm(msg)) {
+        toast(en ? 'Cancelled — edit the existing invoice instead' : 'Cancelado — edita la factura existente', 'warn');
+        return;
+      }
+    }
+  }
   
   try {
     if (editingId) {
@@ -5722,6 +5755,7 @@ window.openPaymentModal = function(id) {
       return `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${icon} <strong>${escapeHtml(typeLabel)}</strong>${pdfNote} ${statusBadge}</div>
         <div style="margin-top:4px;">→ ${escapeHtml(ev.recipientName || '')} (${escapeHtml(ev.recipient || '—')})${extra}</div>
+        ${ev.publishedBy ? `<div style="font-size:11px;color:var(--text-soft);margin-top:2px;">${en ? 'Published by' : 'Publicado por'}: <b>${escapeHtml(ev.publishedBy)}</b></div>` : ''}
         <div style="color:var(--text-mute);font-size:11px;margin-top:2px;">${escapeHtml(whenStr)}</div>
         ${confirmBtn}
       </div>`;
@@ -5850,6 +5884,112 @@ function offerCollectionsNotification(invoiceId, reason) {
   generateCollectionsEml(inv, reason);
 }
 
+// View the PDF stored on an invoice (opens in a new browser tab so the user
+// can verify "yes, the PDF really is saved on this invoice"). Used by the
+// 📎 PDF badge on each invoice card. Falls back to download if popups blocked.
+window.viewInvoicePdf = function(invoiceId) {
+  const inv = allInvoices.find(i => i.id === invoiceId);
+  if (!inv || !inv.pdfBase64) {
+    toast(currentLang === 'en' ? 'No PDF saved on this invoice' : 'Esta factura no tiene PDF guardado', 'error');
+    return;
+  }
+  try {
+    const byteChars = atob(inv.pdfBase64);
+    const byteArray = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([byteArray], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (!win) {
+      // Popup blocked — fall back to download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = inv.pdfFilename || `Invoice_${inv.invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    console.error('[viewInvoicePdf]', e);
+    toast('Error: ' + e.message, 'error');
+  }
+};
+
+// ════════════════════════════════════════════════════════════
+// USER IDENTITY — Invoice Tracker uses Anonymous Auth (no formal login),
+// so we maintain a localStorage-backed "who am I" so audit attribution
+// (alerts, history entries) shows the real person publishing.
+// ════════════════════════════════════════════════════════════
+const INVOICE_TRACKER_USERS = [
+  { name: 'Alberto', role: 'Service Manager · Admin', initials: 'AR' },
+  { name: 'Nela',    role: 'Service Admin · Organizer', initials: 'NE' },
+  { name: 'Celia',   role: 'Customer Service · Organizer', initials: 'CE' }
+];
+const INVOICE_TRACKER_USER_KEY = 'invoiceTrackerUser';
+
+function getInvoiceTrackerUser() {
+  try {
+    return localStorage.getItem(INVOICE_TRACKER_USER_KEY) || null;
+  } catch (_e) { return null; }
+}
+
+function setInvoiceTrackerUser(name) {
+  try {
+    if (name) localStorage.setItem(INVOICE_TRACKER_USER_KEY, name);
+    else localStorage.removeItem(INVOICE_TRACKER_USER_KEY);
+  } catch (_e) {}
+  updateUserPickerButton();
+}
+
+function updateUserPickerButton() {
+  const btn = document.getElementById('userPickerBtn');
+  if (!btn) return;
+  const name = getInvoiceTrackerUser();
+  if (name) {
+    const u = INVOICE_TRACKER_USERS.find(x => x.name === name);
+    btn.textContent = u ? `👤 ${u.initials}` : `👤 ${name.substring(0,2).toUpperCase()}`;
+    btn.title = currentLang === 'en' ? `Signed in as ${name} — click to change` : `Sesión como ${name} — click para cambiar`;
+    btn.style.background = 'var(--accent-soft)';
+    btn.style.color = 'var(--accent)';
+    btn.style.borderColor = 'var(--accent)';
+  } else {
+    btn.textContent = '👤';
+    btn.title = currentLang === 'en' ? 'Set your name (for alert attribution)' : 'Establece tu nombre (para atribución de alertas)';
+    btn.style.background = '#FEF2F2';
+    btn.style.color = '#991B1B';
+    btn.style.borderColor = '#FCA5A5';
+  }
+}
+
+window.openUserPicker = function() {
+  const list = document.getElementById('userPickerList');
+  const current = getInvoiceTrackerUser();
+  const en = currentLang === 'en';
+  list.innerHTML = INVOICE_TRACKER_USERS.map(u => {
+    const isActive = current === u.name;
+    return `<button onclick="window.pickUser('${u.name.replace(/'/g, "\\'")}')" style="
+      display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--r-md);
+      border:2px solid ${isActive ? 'var(--accent)' : 'var(--border)'};
+      background:${isActive ? 'var(--accent-soft)' : 'var(--bg-card)'};
+      cursor:pointer;text-align:left;width:100%;transition:all 0.15s;
+    ">
+      <span style="display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:var(--accent);color:white;font-weight:700;font-size:13px;">${u.initials}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:14px;color:var(--text);">${u.name}${isActive ? ' ✓' : ''}</div>
+        <div style="font-size:11px;color:var(--text-soft);">${u.role}</div>
+      </div>
+    </button>`;
+  }).join('');
+  document.getElementById('userPickerModal').classList.add('open');
+};
+
+window.pickUser = function(name) {
+  setInvoiceTrackerUser(name);
+  closeModal('userPickerModal');
+  toast((currentLang === 'en' ? 'Now signed in as ' : 'Ahora como ') + name, 'success');
+};
+
 // ════════════════════════════════════════════════════════════
 // CROSS-APP ALERT — UI handlers (publishes to TECH-TICKETS bus)
 // ════════════════════════════════════════════════════════════
@@ -5900,6 +6040,17 @@ window.publishCrossAppAlert = async function() {
   const en = currentLang === 'en';
   const btn = document.getElementById('caAlertPublishBtn');
   
+  // Identify who is publishing — required for proper audit attribution
+  let publishedBy = getInvoiceTrackerUser();
+  if (!publishedBy) {
+    closeModal('crossAppAlertModal');
+    toast(en
+      ? 'Please pick who you are first (button 👤 in header), then publish again'
+      : 'Primero indica quién eres (botón 👤 en el header) y vuelve a publicar', 'error');
+    window.openUserPicker();
+    return;
+  }
+  
   btn.disabled = true;
   btn.textContent = en ? 'Publishing…' : 'Publicando…';
   
@@ -5939,7 +6090,7 @@ window.publishCrossAppAlert = async function() {
       customerName: inv.customerName,
       payload,
       severity,
-      createdBy: 'alberto@aspenspas.com'
+      createdBy: publishedBy
     });
     
     if (!result) throw new Error('Publish returned null');
@@ -5957,6 +6108,7 @@ window.publishCrossAppAlert = async function() {
       recipient: 'TECH-TICKETS',
       recipientName: 'Tech Team',
       reason: inv.paymentReason || null,
+      publishedBy: publishedBy,
       confirmed: true,
       confirmedAt: Date.now()
     };
@@ -7872,6 +8024,7 @@ function renderInvoiceCardHtml(inv) {
       <div class="invoice-main">
         <div class="invoice-title">
           <span class="invoice-num">#${escapeHtml(inv.invoiceNumber)}</span>
+          ${inv.pdfBase64 ? `<span onclick="event.stopPropagation();window.viewInvoicePdf('${inv.id}')" title="${escapeHtml(currentLang === 'en' ? 'PDF saved — click to view' : 'PDF guardado — click para ver')}" style="display:inline-flex;align-items:center;gap:3px;background:#DCFCE7;color:#15803D;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;cursor:pointer;border:1px solid #86EFAC;">📎 PDF</span>` : ''}
           <span class="invoice-customer clickable" onclick="window.openCustomerDetail('${escapeHtml(inv.customerName).replace(/'/g, "\\'")}')">${escapeHtml(inv.customerName)}</span>
           <span class="status-badge ${s}">${statusLabel(s)}</span>
           ${payPill}
@@ -8652,6 +8805,7 @@ document.getElementById('fCustomerName').addEventListener('blur', (e) => {
 applyI18n();  // Apply current language to all data-i18n elements
 initFirebase();
 wirePaymentReasonRadios();
+updateUserPickerButton();  // Show current user (Alberto/Nela/Celia) or red "set me" state
 window.toast = toast;
 
 // Restart notif checker if it was previously enabled
