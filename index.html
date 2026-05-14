@@ -1102,7 +1102,7 @@ input.field-err, textarea.field-err, select.field-err {
         <span class="brand-dot"></span>
         <span class="brand-title">Invoice Tracker</span>
       </div>
-      <span class="brand-sub" data-i18n="app.subtitle">Aspen Spas · service1@aspenspas.com</span>
+      <span class="brand-sub" data-i18n="app.subtitle">Aspen Spas · service2@aspenspas.com</span>
     </div>
     <div class="header-actions">
       <div class="connection-status">
@@ -1383,7 +1383,7 @@ input.field-err, textarea.field-err, select.field-err {
       <div class="email-preview">
         <div class="email-preview-row">
           <span class="email-preview-label">From:</span>
-          <span class="email-preview-value">service1@aspenspas.com</span>
+          <span class="email-preview-value" id="prevFrom">service2@aspenspas.com</span>
         </div>
         <div class="email-preview-row">
           <span class="email-preview-label">To:</span>
@@ -1986,7 +1986,7 @@ let allInvoices = [];
 const I18N = {
   es: {
     // Header
-    'app.subtitle': 'Aspen Spas · service1@aspenspas.com',
+    'app.subtitle': 'Aspen Spas · service2@aspenspas.com',
     'header.connection.cloud': 'Sincronizado',
     'header.connection.local': 'Modo local (sin Firebase)',
     'header.notif.on': 'Notificaciones activas (click para desactivar)',
@@ -2251,7 +2251,7 @@ const I18N = {
   },
   en: {
     // Header
-    'app.subtitle': 'Aspen Spas · service1@aspenspas.com',
+    'app.subtitle': 'Aspen Spas · service2@aspenspas.com',
     'header.connection.cloud': 'Synced',
     'header.connection.local': 'Local mode (no Firebase)',
     'header.notif.on': 'Notifications enabled (click to disable)',
@@ -4255,7 +4255,7 @@ function buildEmailHtmlBody(inv, stage) {
     <tr>
       <td style="background:#f8fafc; padding:20px 36px; text-align:center; border-top:1px solid #e2e8f0;">
         <div style="font-size:13px; color:#64748b;">
-          <a href="mailto:service1@aspenspas.com" style="color:#475569; text-decoration:none;">service1@aspenspas.com</a>
+          <a href="mailto:${getActiveUserEmail()}" style="color:#475569; text-decoration:none;">${getActiveUserEmail()}</a>
           &nbsp;·&nbsp;
           <a href="tel:${COMPANY_PHONE.replace(/[^\d]/g, '')}" style="color:#475569; text-decoration:none;">${escapeHtml(COMPANY_PHONE)}</a>
           &nbsp;·&nbsp;
@@ -4292,7 +4292,7 @@ ${copy.closing} ${COMPANY_PHONE}.
 
 ${copy.signoff}
 ${FROM_NAME}
-service1@aspenspas.com  |  ${COMPANY_PHONE}  |  ${COMPANY_WEBSITE}`;
+${getActiveUserEmail()}  |  ${COMPANY_PHONE}  |  ${COMPANY_WEBSITE}`;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -4312,7 +4312,7 @@ function buildEmlFile(inv, pdfBase64, pdfFilename, stage) {
   const wrappedB64 = pdfBase64 ? pdfBase64.match(/.{1,76}/g).join('\r\n') : '';
   
   const lines = [
-    `From: "${FROM_NAME}" <service1@aspenspas.com>`,
+    `From: "${FROM_NAME}" <${getActiveUserEmail()}>`,
     `To: ${inv.customerEmail}`,
     `Subject: ${subject}`,
     `Date: ${emailDate}`,
@@ -5874,10 +5874,16 @@ function offerCollectionsNotification(invoiceId, reason) {
   const reasonLabel = reason === 'cc_declined'
     ? (en ? 'Credit card DECLINED' : 'Tarjeta DECLINADA')
     : (en ? 'No credit card on file' : 'Sin CC en archivo');
-  
+
+  // For CC-related issues, Cc Alberto so he and Celia coordinate collecting the card
+  const ccCard = (reason === 'cc_declined' || reason === 'cc_needed');
+  const ccLine = ccCard
+    ? (en ? `\nCc: Alberto <${ALBERTO_EMAIL}>` : `\nCc: Alberto <${ALBERTO_EMAIL}>`)
+    : '';
+
   if (!confirm(en
-    ? `Send internal alert email to ${collectionsName || collectionsEmail}?\n\nInvoice: #${inv.invoiceNumber}\nCustomer: ${inv.customerName}\nIssue: ${reasonLabel}\nAmount: ${fmtCurrency(inv.amount)}`
-    : `¿Mandar alerta interna a ${collectionsName || collectionsEmail}?\n\nFactura: #${inv.invoiceNumber}\nCliente: ${inv.customerName}\nProblema: ${reasonLabel}\nMonto: ${fmtCurrency(inv.amount)}`)) {
+    ? `Send internal alert email to ${collectionsName || collectionsEmail}?${ccLine}\n\nInvoice: #${inv.invoiceNumber}\nCustomer: ${inv.customerName}\nIssue: ${reasonLabel}\nAmount: ${fmtCurrency(inv.amount)}`
+    : `¿Mandar alerta interna a ${collectionsName || collectionsEmail}?${ccLine}\n\nFactura: #${inv.invoiceNumber}\nCliente: ${inv.customerName}\nProblema: ${reasonLabel}\nMonto: ${fmtCurrency(inv.amount)}`)) {
     return;
   }
   
@@ -5922,16 +5928,35 @@ window.viewInvoicePdf = function(invoiceId) {
 // (alerts, history entries) shows the real person publishing.
 // ════════════════════════════════════════════════════════════
 const INVOICE_TRACKER_USERS = [
-  { name: 'Alberto', role: 'Service Manager · Admin', initials: 'AR' },
-  { name: 'Nela',    role: 'Service Admin · Organizer', initials: 'NE' },
-  { name: 'Celia',   role: 'Customer Service · Organizer', initials: 'CE' }
+  { name: 'Alberto', role: 'Service Manager · Admin',       initials: 'AR', email: 'service1@aspenspas.com' },
+  { name: 'Nela',    role: 'Service Admin · Organizer',     initials: 'NE', email: 'service2@aspenspas.com' },
+  { name: 'Celia',   role: 'Customer Service · Organizer',  initials: 'CE', email: 'service@aspenspas.com'  }
 ];
+// Default fallback email when no user is picked (header display + .eml From:)
+const DEFAULT_FROM_EMAIL = 'service2@aspenspas.com';
+// Email accounts used internally (referenced for collections CC routing)
+const ALBERTO_EMAIL = 'service1@aspenspas.com';
+const CELIA_EMAIL   = 'service@aspenspas.com';
 const INVOICE_TRACKER_USER_KEY = 'invoiceTrackerUser';
 
 function getInvoiceTrackerUser() {
   try {
     return localStorage.getItem(INVOICE_TRACKER_USER_KEY) || null;
   } catch (_e) { return null; }
+}
+
+// Get the email of the user currently signed in (Alberto→service1, Nela→service2, Celia→service).
+// Falls back to DEFAULT_FROM_EMAIL when no user picked.
+function getActiveUserEmail() {
+  const name = getInvoiceTrackerUser();
+  if (!name) return DEFAULT_FROM_EMAIL;
+  const u = INVOICE_TRACKER_USERS.find(x => x.name === name);
+  return (u && u.email) ? u.email : DEFAULT_FROM_EMAIL;
+}
+
+// Get the display name for the From header (e.g., "Aspen Spas Service" or saved fromName).
+function getActiveFromName() {
+  return (savedSettings.fromName || 'Aspen Spas Service');
 }
 
 function setInvoiceTrackerUser(name) {
@@ -5946,6 +5971,12 @@ function updateUserPickerButton() {
   const btn = document.getElementById('userPickerBtn');
   if (!btn) return;
   const name = getInvoiceTrackerUser();
+  // Also update the header subtitle "Aspen Spas · <email>" with the active user's email
+  const sub = document.querySelector('.brand-sub');
+  if (sub) sub.textContent = 'Aspen Spas · ' + getActiveUserEmail();
+  // Also update the "From:" in any email-preview modal
+  const prevFrom = document.getElementById('prevFrom');
+  if (prevFrom) prevFrom.textContent = getActiveUserEmail();
   if (name) {
     const u = INVOICE_TRACKER_USERS.find(x => x.name === name);
     btn.textContent = u ? `👤 ${u.initials}` : `👤 ${name.substring(0,2).toUpperCase()}`;
@@ -6234,10 +6265,21 @@ async function generateCollectionsEml(inv, reason) {
   const boundary = '====aspen_internal_' + Math.random().toString(36).slice(2, 12) + '====';
   const altBoundary = '====alt_internal_' + Math.random().toString(36).slice(2, 12) + '====';
   const wrappedB64 = pdfBase64 ? pdfBase64.match(/.{1,76}/g).join('\r\n') : '';
-  
+
+  // For CC-related issues, Nela wants Alberto on Cc so he and Celia can
+  // coordinate collecting the credit card data with the customer.
+  const ccCard = (reason === 'cc_declined' || reason === 'cc_needed');
+  // Don't Cc Alberto if he himself is the active sender, and don't Cc Celia if she is.
+  const activeEmail = getActiveUserEmail();
+  const ccList = [];
+  if (ccCard && ALBERTO_EMAIL !== activeEmail && ALBERTO_EMAIL !== (collectionsEmail || '').toLowerCase()) {
+    ccList.push(`"Alberto Reynaldo" <${ALBERTO_EMAIL}>`);
+  }
+
   const emlLines = [
-    `From: "${savedSettings.fromName || 'Aspen Spas Service'}" <service1@aspenspas.com>`,
+    `From: "${savedSettings.fromName || 'Aspen Spas Service'}" <${activeEmail}>`,
     `To: "${collectionsName || 'Collections'}" <${collectionsEmail}>`,
+    ...(ccList.length ? [`Cc: ${ccList.join(', ')}`] : []),
     `Subject: ${subject}`,
     `Date: ${new Date().toUTCString()}`,
     `X-Unsent: 1`,
@@ -6534,7 +6576,7 @@ window.notifyDepositTeam = async function() {
   const wrappedB64 = pdfBase64 ? pdfBase64.match(/.{1,76}/g).join('\r\n') : '';
   
   const emlLines = [
-    `From: "${savedSettings.fromName || 'Aspen Spas Service'}" <service1@aspenspas.com>`,
+    `From: "${savedSettings.fromName || 'Aspen Spas Service'}" <${getActiveUserEmail()}>`,
     `To: "${collectionsName || 'Deposit Team'}" <${collectionsEmail}>`,
     `Subject: ${subject}`,
     `Date: ${new Date().toUTCString()}`,
