@@ -1110,6 +1110,7 @@ input.field-err, textarea.field-err, select.field-err {
         <span id="connText">…</span>
       </div>
       <button class="icon-btn" id="userPickerBtn" onclick="window.openUserPicker()" title="Who's using this — used for alert attribution" style="font-weight:700;font-size:11px;letter-spacing:0.05em;width:auto;padding:0 12px;background:var(--accent-soft);color:var(--accent);border-color:var(--accent);">👤</button>
+      <button class="icon-btn" id="crossAppInboxBtn" onclick="window.openCrossAppInbox()" title="Tech responses & resolutions" style="position:relative;width:auto;padding:0 10px;font-size:14px;">📬<span id="crossAppInboxBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#dc2626;color:white;font-size:9px;font-weight:700;border-radius:999px;padding:1px 5px;min-width:16px;height:14px;line-height:12px;text-align:center;box-shadow:0 1px 3px rgba(220,38,38,0.4);"></span></button>
       <button class="icon-btn" id="langBtn" onclick="toggleLang()" data-i18n="header.lang" data-i18n-title="header.lang.title" style="font-weight:700;font-size:11px;letter-spacing:0.05em;width:auto;padding:0 10px;">EN</button>
       <button class="icon-btn" id="notifBtn" onclick="window.openNotifPanel()" data-i18n-title="header.notif.title">🔕</button>
       <button class="icon-btn" onclick="openSettingsModal()" data-i18n-title="header.settings">⚙</button>
@@ -1732,6 +1733,24 @@ Mahogany Durawood..."></textarea>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('notifModal')" data-i18n="form.close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ CROSS-APP INBOX (tech resolutions) ═════════ -->
+<div class="modal-backdrop" id="crossAppInboxModal">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <span class="modal-title">📬 <span id="crossAppInboxTitle">Respuestas de Tech</span> <span id="crossAppInboxUnreadCount" style="background:#dc2626;color:white;font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;margin-left:6px;display:none;"></span></span>
+      <button class="modal-close" onclick="closeModal('crossAppInboxModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px;" id="crossAppInboxHint">Cuando un técnico resuelve una alerta que enviaste desde Invoice Tracker, aparece acá. Las marcadas con punto rojo son nuevas.</div>
+      <div id="crossAppInboxList"></div>
+    </div>
+    <div class="modal-footer" style="display:flex;gap:8px;justify-content:space-between;">
+      <button class="btn btn-ghost btn-sm" id="crossAppInboxMarkAllBtn" onclick="window.markAllResolutionsSeen()">Marcar todo como leído</button>
+      <button class="btn btn-ghost" onclick="closeModal('crossAppInboxModal')">Cerrar</button>
     </div>
   </div>
 </div>
@@ -3019,6 +3038,8 @@ function getStageCopyPlain(stage) {
 // ════════════════════════════════════════════════════════════
 function computeAndRender() {
   const sorted = [...allInvoices].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  // Refresh the cross-app inbox badge — picks up new resolutions that arrived via Firebase realtime
+  try { if (typeof updateCrossAppInboxBadge === 'function') updateCrossAppInboxBadge(); } catch(_e){}
   
   // Stats
   const now = Date.now();
@@ -7229,6 +7250,213 @@ function _firestoreUnwrap(fields) {
 let _crossAppPollTimer = null;
 let _crossAppPollBusy = false;
 
+// ═══ CROSS-APP INBOX — track resolutions from TECH-TICKETS ═══
+// Persists the timestamp of the latest seen resolution per device.
+// Anything newer than this is "unread" and shown with a red dot.
+const CROSSAPP_INBOX_SEEN_KEY = 'aspenCrossAppInboxLastSeen';
+
+function _getCrossAppInboxLastSeen() {
+  try { return Number(localStorage.getItem(CROSSAPP_INBOX_SEEN_KEY) || 0); }
+  catch(_e) { return 0; }
+}
+
+function _setCrossAppInboxLastSeen(ts) {
+  try { localStorage.setItem(CROSSAPP_INBOX_SEEN_KEY, String(ts)); }
+  catch(_e) {}
+}
+
+// Get ALL crossapp_alert_resolved entries across every invoice, paired with the invoice itself.
+// Sorted newest first. Used to render the inbox list.
+function getAllCrossAppResolutions() {
+  const out = [];
+  for (const inv of allInvoices) {
+    for (const h of (inv.history || [])) {
+      if (h.action === 'crossapp_alert_resolved') {
+        // Find the matching publish entry for context (severity, reason, etc)
+        const pub = (inv.history || []).find(p => p.action === 'crossapp_alert_published' && p.eventId === h.eventId);
+        out.push({
+          ts: h.ts || 0,
+          eventId: h.eventId,
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          customerName: inv.customerName,
+          amount: inv.amount,
+          resolvedBy: h.resolvedBy || (currentLang === 'en' ? 'Tech team' : 'Equipo Tech'),
+          reason: pub ? pub.reason : null,
+          severity: pub ? pub.severity : null,
+          publishedBy: pub ? pub.publishedBy : null
+        });
+      }
+    }
+  }
+  out.sort((a,b) => b.ts - a.ts);
+  return out;
+}
+
+function countUnreadResolutions() {
+  const lastSeen = _getCrossAppInboxLastSeen();
+  return getAllCrossAppResolutions().filter(r => r.ts > lastSeen).length;
+}
+
+// Update the red dot badge on the 📬 button in the header.
+function updateCrossAppInboxBadge() {
+  const badge = document.getElementById('crossAppInboxBadge');
+  if (!badge) return;
+  const n = countUnreadResolutions();
+  if (n > 0) {
+    badge.textContent = n > 99 ? '99+' : String(n);
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// Human-friendly label for a reason code (mirrors TECH-TICKETS labels)
+function _reasonLabelEs(reason) {
+  const map = {
+    cc_declined:           'Tarjeta declinada',
+    cc_needed:             'Sin tarjeta en archivo',
+    no_cc_on_file:         'Sin tarjeta en archivo',
+    no_response:           'Cliente no responde',
+    disputed:              'Disputado',
+    partial:               'Pago parcial',
+    partial_payment:       'Pago parcial',
+    pending:               'Pago pendiente',
+    check_pending_deposit: 'Cheque pendiente de depósito',
+    unpaid_30d:            'Sin pago 30+ días'
+  };
+  return reason && map[reason] ? map[reason] : (reason || 'Alerta');
+}
+
+function _reasonLabelEn(reason) {
+  const map = {
+    cc_declined:           'Card declined',
+    cc_needed:             'No card on file',
+    no_cc_on_file:         'No card on file',
+    no_response:           'No customer response',
+    disputed:              'Disputed',
+    partial:               'Partial payment',
+    partial_payment:       'Partial payment',
+    pending:               'Pending payment',
+    check_pending_deposit: 'Check pending deposit',
+    unpaid_30d:            'Unpaid 30+ days'
+  };
+  return reason && map[reason] ? map[reason] : (reason || 'Alert');
+}
+
+function _relativeTime(ts) {
+  if (!ts) return '';
+  const en = currentLang === 'en';
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if (mins < 1)   return en ? 'just now' : 'recién';
+  if (mins < 60)  return en ? `${mins}m ago` : `hace ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)   return en ? `${hrs}h ago` : `hace ${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30)  return en ? `${days}d ago` : `hace ${days}d`;
+  return new Date(ts).toLocaleDateString();
+}
+
+// Open the inbox modal and render the list of resolutions.
+window.openCrossAppInbox = function() {
+  renderCrossAppInbox();
+  document.getElementById('crossAppInboxModal').classList.add('open');
+};
+
+function renderCrossAppInbox() {
+  const en = currentLang === 'en';
+  const listEl = document.getElementById('crossAppInboxList');
+  const titleEl = document.getElementById('crossAppInboxTitle');
+  const countEl = document.getElementById('crossAppInboxUnreadCount');
+  const hintEl = document.getElementById('crossAppInboxHint');
+  const markBtn = document.getElementById('crossAppInboxMarkAllBtn');
+  if (!listEl) return;
+
+  if (titleEl) titleEl.textContent = en ? 'Tech Responses' : 'Respuestas de Tech';
+  if (hintEl)  hintEl.textContent  = en
+    ? 'When a tech resolves an alert you published from Invoice Tracker, it appears here. Red dot = unread.'
+    : 'Cuando un técnico resuelve una alerta que enviaste desde Invoice Tracker, aparece acá. Punto rojo = no leído.';
+  if (markBtn) markBtn.textContent = en ? 'Mark all as read' : 'Marcar todo como leído';
+
+  const lastSeen = _getCrossAppInboxLastSeen();
+  const all = getAllCrossAppResolutions();
+  const unread = all.filter(r => r.ts > lastSeen).length;
+  if (countEl) {
+    if (unread > 0) { countEl.style.display = 'inline-block'; countEl.textContent = unread + (en ? ' new' : ' nuevas'); }
+    else countEl.style.display = 'none';
+  }
+
+  if (!all.length) {
+    listEl.innerHTML = `
+      <div style="text-align:center;padding:48px 20px;color:var(--text-soft);background:#f9fafb;border:1px dashed var(--border);border-radius:8px;">
+        <div style="font-size:42px;margin-bottom:10px;">📭</div>
+        <div style="font-weight:600;font-size:14px;color:var(--text);margin-bottom:4px;">${en ? 'No tech responses yet' : 'Aún no hay respuestas'}</div>
+        <div style="font-size:12px;">${en ? 'When techs resolve your alerts, they\'ll show up here.' : 'Cuando los técnicos resuelvan tus alertas aparecerán acá.'}</div>
+      </div>`;
+    return;
+  }
+
+  // Show up to 50 most recent
+  const items = all.slice(0, 50);
+  const reasonLbl = en ? _reasonLabelEn : _reasonLabelEs;
+  let html = '<div style="display:grid;gap:8px;">';
+  for (const r of items) {
+    const isUnread = r.ts > lastSeen;
+    const time = _relativeTime(r.ts);
+    const reasonText = reasonLbl(r.reason);
+    const sevColor = r.severity === 'urgent' ? '#dc2626' : (r.severity === 'info' ? '#3b82f6' : '#f59e0b');
+    html += `
+      <div onclick="window.goToInvoiceFromInbox('${r.invoiceId}')" style="background:${isUnread ? '#ECFDF5' : 'white'};border:1px solid ${isUnread ? '#6EE7B7' : 'var(--border)'};border-radius:8px;padding:11px 13px;cursor:pointer;transition:all 0.15s;display:flex;gap:11px;align-items:flex-start;">
+        <div style="flex-shrink:0;margin-top:3px;">
+          ${isUnread ? '<span style="display:inline-block;width:9px;height:9px;background:#10b981;border-radius:50%;box-shadow:0 0 0 2px #d1fae5;"></span>' : '<span style="display:inline-block;width:9px;height:9px;background:#d1d5db;border-radius:50%;"></span>'}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span style="font-weight:700;font-size:14px;color:var(--text);">${escapeHtml(r.customerName || '—')}</span>
+            <span style="font-size:11px;color:white;background:${sevColor};font-weight:600;padding:1px 7px;border-radius:999px;">${escapeHtml(reasonText)}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-soft);margin-top:3px;">
+            ${en ? 'Invoice' : 'Factura'} <b>#${escapeHtml(r.invoiceNumber || '')}</b> · <b>${fmtCurrency(r.amount || 0)}</b>
+          </div>
+          <div style="font-size:12px;color:#047857;margin-top:5px;font-weight:600;">
+            ✓ ${en ? 'Resolved by' : 'Resuelto por'} ${escapeHtml(r.resolvedBy)} · ${escapeHtml(time)}
+          </div>
+          ${r.publishedBy ? `<div style="font-size:10px;color:var(--text-mute);margin-top:2px;">${en ? 'You published this alert as' : 'Vos publicaste esta alerta como'} ${escapeHtml(r.publishedBy)}</div>` : ''}
+        </div>
+        <div style="flex-shrink:0;color:#9ca3af;font-size:18px;align-self:center;">›</div>
+      </div>`;
+  }
+  html += '</div>';
+  listEl.innerHTML = html;
+}
+
+// Click a resolution row → close modal, scroll to invoice, briefly highlight it.
+window.goToInvoiceFromInbox = function(invoiceId) {
+  closeModal('crossAppInboxModal');
+  // Find the invoice card in the DOM
+  setTimeout(() => {
+    const card = document.querySelector(`[data-invoice-id="${invoiceId}"]`);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.style.transition = 'box-shadow 0.3s ease';
+      card.style.boxShadow = '0 0 0 3px #10b981';
+      setTimeout(() => { card.style.boxShadow = ''; }, 2400);
+    } else {
+      // Fallback: open the audit modal directly
+      if (typeof window.openCrossAppAlertModal === 'function') window.openCrossAppAlertModal(invoiceId);
+    }
+  }, 200);
+};
+
+window.markAllResolutionsSeen = function() {
+  const all = getAllCrossAppResolutions();
+  const maxTs = all.length ? all[0].ts : Date.now();
+  _setCrossAppInboxLastSeen(maxTs);
+  updateCrossAppInboxBadge();
+  renderCrossAppInbox();
+  toast(currentLang === 'en' ? '✓ Marked as read' : '✓ Marcado como leído', 'success');
+};
+
 async function pollCrossAppResolves() {
   if (document.hidden) return;
   if (_crossAppPollBusy) return;
@@ -7263,12 +7491,13 @@ async function pollCrossAppResolves() {
     }
     const arr = await resp.json();
     if (!Array.isArray(arr)) return;
-    let stampedCount = 0;
+    // Collect NEW resolutions (ones we hadn't stamped yet) so we can show a rich toast per resolution.
+    const newlyStamped = [];
     for (const item of arr) {
       if (!item.document) continue;
       const eventId = item.document.name.split('/').pop();
       const flds = _firestoreUnwrap(item.document.fields);
-      // Find the invoice that originally generated this event
+      // Find the invoice that originally generated this event AND hasn't been stamped yet
       const inv = allInvoices.find(i =>
         (i.history || []).some(h => h.action === 'crossapp_alert_published' && h.eventId === eventId) &&
         !(i.history || []).some(h => h.action === 'crossapp_alert_resolved' && h.eventId === eventId)
@@ -7288,14 +7517,29 @@ async function pollCrossAppResolves() {
         if (db && typeof update === 'function') {
           await update(ref(db, `invoices/${inv.id}`), { history: newHistory });
         }
-        stampedCount++;
+        newlyStamped.push({ inv, resolvedBy: histEntry.resolvedBy, eventId });
       } catch (e) {
         console.warn('[CrossAppPoll] Persist failed:', e);
       }
     }
-    if (stampedCount > 0) {
-      console.info('[CrossAppPoll] Stamped', stampedCount, 'resolution(s) from TECH-TICKETS');
-      toast((currentLang === 'en' ? '✓ ' : '✓ ') + stampedCount + (currentLang === 'en' ? ' tech alert(s) resolved' : ' alerta(s) resueltas por tech'), 'success');
+    if (newlyStamped.length > 0) {
+      console.info('[CrossAppPoll] Stamped', newlyStamped.length, 'resolution(s) from TECH-TICKETS');
+      const en = currentLang === 'en';
+      // ── ENRICHED TOAST: one toast per resolution, with customer name + resolver
+      // For more than 3 at once, fall back to a summary toast to avoid spam.
+      if (newlyStamped.length <= 3) {
+        newlyStamped.forEach(({ inv, resolvedBy }) => {
+          const who = resolvedBy || (en ? 'Tech team' : 'Equipo Tech');
+          const customer = (inv.customerName || '').trim() || (en ? 'a customer' : 'un cliente');
+          const msg = en
+            ? `✓ ${who} resolved alert for ${customer} (#${inv.invoiceNumber})`
+            : `✓ ${who} resolvió la alerta de ${customer} (#${inv.invoiceNumber})`;
+          toast(msg, 'success');
+        });
+      } else {
+        toast((en ? `✓ ${newlyStamped.length} tech alert(s) resolved — see 📬 inbox` : `✓ ${newlyStamped.length} alertas resueltas — ver 📬 inbox`), 'success');
+      }
+      updateCrossAppInboxBadge();
       computeAndRender();
     }
   } catch (e) {
@@ -9053,6 +9297,8 @@ initFirebase();
 wirePaymentReasonRadios();
 updateUserPickerButton();  // Show current user (Alberto/Nela/Celia) or red "set me" state
 startCrossAppResolvePolling();  // Listen for TECH-TICKETS resolves and reflect them locally
+// Update inbox badge after invoices load (initFirebase loads asynchronously, so refresh once data is in)
+setTimeout(() => { try { updateCrossAppInboxBadge(); } catch(_e){} }, 2500);
 window.toast = toast;
 
 // Restart notif checker if it was previously enabled
