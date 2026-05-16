@@ -7310,6 +7310,12 @@ let _crossAppPollBusy = false;
 // Anything newer than this is "unread" and shown with a red dot.
 const CROSSAPP_INBOX_SEEN_KEY = 'aspenCrossAppInboxLastSeen';
 
+// Global cache of ALL resolved cross-app events seen by the poll.
+// We render the inbox from THIS array (not from invoice histories) so events
+// show up even if they don't match an Invoice Tracker invoice — e.g. published
+// from a different device, eventId chain broke, legacy events, etc.
+let _allResolvedEvents = [];
+
 function _getCrossAppInboxLastSeen() {
   try { return Number(localStorage.getItem(CROSSAPP_INBOX_SEEN_KEY) || 0); }
   catch(_e) { return 0; }
@@ -7320,34 +7326,10 @@ function _setCrossAppInboxLastSeen(ts) {
   catch(_e) {}
 }
 
-// Get ALL crossapp_alert_resolved entries across every invoice, paired with the invoice itself.
-// Sorted newest first. Used to render the inbox list.
+// Returns the full list of resolved events, newest first.
+// Includes both matched (linked to an Invoice Tracker invoice) and unmatched.
 function getAllCrossAppResolutions() {
-  const out = [];
-  for (const inv of allInvoices) {
-    for (const h of (inv.history || [])) {
-      if (h.action === 'crossapp_alert_resolved') {
-        // Find the matching publish entry for context (severity, reason, etc)
-        const pub = (inv.history || []).find(p => p.action === 'crossapp_alert_published' && p.eventId === h.eventId);
-        out.push({
-          ts: h.ts || 0,
-          eventId: h.eventId,
-          invoiceId: inv.id,
-          invoiceNumber: inv.invoiceNumber,
-          customerName: inv.customerName,
-          amount: inv.amount,
-          resolvedBy: h.resolvedBy || (currentLang === 'en' ? 'Tech team' : 'Equipo Tech'),
-          resolutionMethod: h.resolutionMethod || null,
-          resolutionNote: h.resolutionNote || null,
-          reason: pub ? pub.reason : null,
-          severity: pub ? pub.severity : null,
-          publishedBy: pub ? pub.publishedBy : null
-        });
-      }
-    }
-  }
-  out.sort((a,b) => b.ts - a.ts);
-  return out;
+  return [..._allResolvedEvents].sort((a, b) => (b.ts || 0) - (a.ts || 0));
 }
 
 function countUnreadResolutions() {
@@ -7489,7 +7471,7 @@ function renderCrossAppInbox() {
     html += `
       <div style="background:${isUnread ? '#ECFDF5' : 'white'};border:1px solid ${isUnread ? '#6EE7B7' : 'var(--border)'};border-radius:10px;overflow:hidden;">
         <!-- Top row: customer + reason + invoice -->
-        <div style="padding:11px 13px;display:flex;gap:11px;align-items:flex-start;cursor:pointer;" onclick="window.goToInvoiceFromInbox('${r.invoiceId}')">
+        <div style="padding:11px 13px;display:flex;gap:11px;align-items:flex-start;${r.matchedInvoiceId ? 'cursor:pointer;' : ''}" ${r.matchedInvoiceId ? `onclick="window.goToInvoiceFromInbox('${r.matchedInvoiceId}')"` : ''}>
           <div style="flex-shrink:0;margin-top:3px;">
             ${isUnread
               ? '<span style="display:inline-block;width:9px;height:9px;background:#10b981;border-radius:50%;box-shadow:0 0 0 2px #d1fae5;"></span>'
@@ -7498,10 +7480,11 @@ function renderCrossAppInbox() {
           <div style="flex:1;min-width:0;">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               <span style="font-weight:700;font-size:15px;color:var(--text);">${escapeHtml(r.customerName || '—')}</span>
+              ${!r.matchedInvoiceId ? `<span style="font-size:10px;color:#9ca3af;background:#f3f4f6;padding:1px 6px;border-radius:999px;" title="${en ? 'Resolution from another device or app' : 'Resolución desde otro dispositivo o app'}">${en ? 'external' : 'externa'}</span>` : ''}
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px;">
-              <span style="font-size:11px;color:white;background:${sevColor};font-weight:600;padding:2px 8px;border-radius:999px;">${escapeHtml(reasonText)}</span>
-              <span style="font-size:12px;color:var(--text-soft);">${en ? 'Invoice' : 'Factura'} <b>#${escapeHtml(r.invoiceNumber || '')}</b> · <b>${fmtCurrency(r.amount || 0)}</b></span>
+              ${r.reason ? `<span style="font-size:11px;color:white;background:${sevColor};font-weight:600;padding:2px 8px;border-radius:999px;">${escapeHtml(reasonText)}</span>` : ''}
+              ${r.invoiceNumber ? `<span style="font-size:12px;color:var(--text-soft);">${en ? 'Invoice' : 'Factura'} <b>#${escapeHtml(String(r.invoiceNumber))}</b>${r.amount ? ' · <b>' + fmtCurrency(r.amount) + '</b>' : ''}</span>` : ''}
             </div>
           </div>
           <div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
@@ -7585,13 +7568,15 @@ function getCustomerAlertHistory(customerName) {
   if (!customerName) return [];
   const norm = String(customerName).trim().toLowerCase();
   const out = [];
+  const seenEventIds = new Set();
+  // First pass: walk invoices that publish/resolve via history
   for (const inv of allInvoices) {
     if (String(inv.customerName || '').trim().toLowerCase() !== norm) continue;
     const hist = inv.history || [];
-    // Pair each publish with its resolution (if exists)
     const pubs = hist.filter(h => h.action === 'crossapp_alert_published');
     for (const pub of pubs) {
       const res = hist.find(h => h.action === 'crossapp_alert_resolved' && h.eventId === pub.eventId);
+      seenEventIds.add(pub.eventId);
       out.push({
         eventId: pub.eventId,
         invoiceId: inv.id,
@@ -7609,7 +7594,28 @@ function getCustomerAlertHistory(customerName) {
       });
     }
   }
-  out.sort((a, b) => b.publishedAt - a.publishedAt);
+  // Second pass: include resolved events from _allResolvedEvents that
+  // weren't already captured (e.g., legacy events with broken eventId chain)
+  for (const ev of _allResolvedEvents) {
+    if (!ev.customerName || String(ev.customerName).trim().toLowerCase() !== norm) continue;
+    if (seenEventIds.has(ev.eventId)) continue;
+    out.push({
+      eventId: ev.eventId,
+      invoiceId: ev.matchedInvoiceId || null,
+      invoiceNumber: ev.invoiceNumber,
+      amount: ev.amount,
+      publishedAt: ev.ts,  // best guess — we don't have publishedAt for orphans
+      publishedBy: ev.publishedBy,
+      reason: ev.reason,
+      severity: ev.severity,
+      resolved: true,
+      resolvedAt: ev.ts,
+      resolvedBy: ev.resolvedBy,
+      resolutionMethod: ev.resolutionMethod,
+      resolutionNote: ev.resolutionNote
+    });
+  }
+  out.sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0));
   return out;
 }
 
@@ -7745,12 +7751,14 @@ window.renderCrossAppStats = function(rangeDays) {
 
   // Collect ALL alert events from invoice histories (published + resolved pairs)
   const events = [];
+  const seenIds = new Set();
   for (const inv of allInvoices) {
     const hist = inv.history || [];
     const pubs = hist.filter(h => h.action === 'crossapp_alert_published');
     for (const pub of pubs) {
       if (pub.ts < cutoff) continue;
       const res = hist.find(h => h.action === 'crossapp_alert_resolved' && h.eventId === pub.eventId);
+      seenIds.add(pub.eventId);
       events.push({
         ts: pub.ts,
         customerName: inv.customerName,
@@ -7763,6 +7771,22 @@ window.renderCrossAppStats = function(rangeDays) {
         resolutionMethod: res ? res.resolutionMethod : null
       });
     }
+  }
+  // Augment with orphan resolved events that didn't have a matching publish history
+  for (const ev of _allResolvedEvents) {
+    if (seenIds.has(ev.eventId)) continue;
+    if (ev.ts < cutoff) continue;
+    events.push({
+      ts: ev.ts,
+      customerName: ev.customerName,
+      reason: ev.reason,
+      severity: ev.severity,
+      publishedBy: ev.publishedBy,
+      resolved: true,
+      resolvedAt: ev.ts,
+      resolvedBy: ev.resolvedBy,
+      resolutionMethod: ev.resolutionMethod
+    });
   }
 
   const total = events.length;
@@ -8013,8 +8037,8 @@ function renderInboxStatusStrip() {
     const ago = secs < 60 ? (en ? `${secs}s ago` : `hace ${secs}s`) : (en ? `${Math.floor(secs/60)}m ago` : `hace ${Math.floor(secs/60)}m`);
     dot = '<span style="display:inline-block;width:8px;height:8px;background:#10b981;border-radius:50%;"></span>';
     msg = (en
-      ? `Connected · Last check ${ago} · ${_crossAppPollLastCount} resolved event(s) in TECH-TICKETS · ${all.length} total · ${unread} unread`
-      : `Conectado · Última verificación ${ago} · ${_crossAppPollLastCount} evento(s) resuelto(s) en TECH-TICKETS · ${all.length} total · ${unread} sin leer`);
+      ? `Connected · Last check ${ago} · <b>${all.length}</b> resolved alert(s) · <b>${unread}</b> unread`
+      : `Conectado · Última verificación ${ago} · <b>${all.length}</b> alerta(s) resuelta(s) · <b>${unread}</b> sin leer`);
   } else {
     dot = '<span style="display:inline-block;width:8px;height:8px;background:#f59e0b;border-radius:50%;"></span>';
     msg = en ? 'Waiting for first sync…' : 'Esperando primera sincronización…';
@@ -8075,58 +8099,111 @@ async function pollCrossAppResolves() {
     _crossAppPollLastCount = docs.length;
     console.info('[CrossAppPoll] Received', docs.length, 'resolved event(s) from Firestore');
 
-    // Collect NEW resolutions (ones we hadn't stamped yet) so we can show a rich toast per resolution.
+    // Build the new "_allResolvedEvents" cache. We include EVERY resolved event,
+    // not just ones that match an Invoice Tracker invoice. We also try to match
+    // each event to an invoice (by eventId OR by customer+invoice#) for enrichment
+    // and to stamp the invoice history so the "✓ Tech ack" badge keeps working.
+    const previouslyKnownIds = new Set(_allResolvedEvents.map(e => e.eventId));
+    const nextEvents = [];
     const newlyStamped = [];
+    const en = currentLang === 'en';
+
     for (const item of docs) {
       const eventId = item.document.name.split('/').pop();
       const flds = _firestoreUnwrap(item.document.fields);
-      // Find the invoice that originally generated this event AND hasn't been stamped yet
-      const inv = allInvoices.find(i =>
-        (i.history || []).some(h => h.action === 'crossapp_alert_published' && h.eventId === eventId) &&
-        !(i.history || []).some(h => h.action === 'crossapp_alert_resolved' && h.eventId === eventId)
+      const payload = (flds.payload && typeof flds.payload === 'object') ? flds.payload : {};
+
+      // Extract the "when resolved" timestamp — prefer Firestore server time
+      let resolvedTs = 0;
+      if (flds.resolvedAt) {
+        if (flds.resolvedAt.toMillis) resolvedTs = flds.resolvedAt.toMillis();
+        else if (typeof flds.resolvedAt === 'number') resolvedTs = flds.resolvedAt;
+        else if (typeof flds.resolvedAt === 'string') resolvedTs = new Date(flds.resolvedAt).getTime() || 0;
+      }
+      if (!resolvedTs) resolvedTs = Date.now();
+
+      // Try to match an invoice — primary by eventId, fallback by customer+invoice#
+      let matchedInv = allInvoices.find(i =>
+        (i.history || []).some(h => h.action === 'crossapp_alert_published' && h.eventId === eventId)
       );
-      if (!inv) continue;
-      // Stamp the resolution into the invoice's history
-      const histEntry = {
-        ts: Date.now(),
-        action: 'crossapp_alert_resolved',
+      if (!matchedInv) {
+        const invNum = payload.invoiceNumber || flds.invoiceNumber;
+        const custName = flds.customerName || payload.customerName;
+        if (invNum && custName) {
+          matchedInv = allInvoices.find(i =>
+            String(i.invoiceNumber || '') === String(invNum) &&
+            String(i.customerName || '').trim().toLowerCase() === String(custName).trim().toLowerCase()
+          );
+        }
+      }
+
+      // Build the event record we'll show in the inbox (using event data, falling back to invoice data)
+      const evRecord = {
         eventId,
-        resolvedAt: flds.resolvedAt || null,
+        ts: resolvedTs,
+        customerName: flds.customerName || payload.customerName || (matchedInv ? matchedInv.customerName : '—'),
+        invoiceNumber: payload.invoiceNumber || flds.invoiceNumber || (matchedInv ? matchedInv.invoiceNumber : null),
+        amount: Number(payload.amount || flds.amount || (matchedInv ? matchedInv.amount : 0)) || 0,
+        reason: payload.reason || null,
+        severity: flds.severity || null,
         resolvedBy: flds.resolvedBy || null,
         resolutionMethod: flds.resolutionMethod || null,
-        resolutionNote: flds.resolutionNote || null
+        resolutionNote: flds.resolutionNote || null,
+        publishedBy: flds.createdBy || payload.publishedBy || null,
+        matchedInvoiceId: matchedInv ? matchedInv.id : null,
+        sourceApp: flds.sourceApp || 'unknown'
       };
-      const newHistory = [...(inv.history || []), histEntry];
-      inv.history = newHistory;
-      try {
-        if (db && typeof update === 'function') {
-          await update(ref(db, `invoices/${inv.id}`), { history: newHistory });
+      nextEvents.push(evRecord);
+
+      // If matched to an invoice AND not yet stamped, stamp it so the invoice card shows "Tech ack"
+      if (matchedInv) {
+        const alreadyStamped = (matchedInv.history || []).some(h => h.action === 'crossapp_alert_resolved' && h.eventId === eventId);
+        if (!alreadyStamped) {
+          const histEntry = {
+            ts: Date.now(),
+            action: 'crossapp_alert_resolved',
+            eventId,
+            resolvedAt: flds.resolvedAt || null,
+            resolvedBy: flds.resolvedBy || null,
+            resolutionMethod: flds.resolutionMethod || null,
+            resolutionNote: flds.resolutionNote || null
+          };
+          const newHistory = [...(matchedInv.history || []), histEntry];
+          matchedInv.history = newHistory;
+          try {
+            if (db && typeof update === 'function') {
+              await update(ref(db, `invoices/${matchedInv.id}`), { history: newHistory });
+            }
+          } catch (e) {
+            console.warn('[CrossAppPoll] Persist failed:', e);
+          }
         }
-        newlyStamped.push({ inv, resolvedBy: histEntry.resolvedBy, eventId });
-      } catch (e) {
-        console.warn('[CrossAppPoll] Persist failed:', e);
+      }
+
+      // If this event wasn't in our previous cache, it's "new" → toast + push
+      if (!previouslyKnownIds.has(eventId)) {
+        newlyStamped.push({ ev: evRecord });
       }
     }
+    _allResolvedEvents = nextEvents;
+
     if (newlyStamped.length > 0) {
-      console.info('[CrossAppPoll] Stamped', newlyStamped.length, 'NEW resolution(s)');
-      const en = currentLang === 'en';
+      console.info('[CrossAppPoll]', newlyStamped.length, 'NEW resolution(s)');
       if (newlyStamped.length <= 3) {
-        newlyStamped.forEach(({ inv, resolvedBy, eventId }) => {
-          const who = resolvedBy || (en ? 'Tech team' : 'Equipo Tech');
-          const customer = (inv.customerName || '').trim() || (en ? 'a customer' : 'un cliente');
+        newlyStamped.forEach(({ ev }) => {
+          const who = ev.resolvedBy || (en ? 'Tech team' : 'Equipo Tech');
+          const customer = (ev.customerName || '').trim() || (en ? 'a customer' : 'un cliente');
+          const invNumPart = ev.invoiceNumber ? ` (#${ev.invoiceNumber})` : '';
           const msg = en
-            ? `✓ ${who} resolved alert for ${customer} (#${inv.invoiceNumber})`
-            : `✓ ${who} resolvió la alerta de ${customer} (#${inv.invoiceNumber})`;
+            ? `✓ ${who} resolved alert for ${customer}${invNumPart}`
+            : `✓ ${who} resolvió la alerta de ${customer}${invNumPart}`;
           toast(msg, 'success');
-          // Find the resolutionNote / method from the history we just stamped
-          const histEntry = (inv.history || []).find(h => h.action === 'crossapp_alert_resolved' && h.eventId === eventId);
-          // Fire browser/PWA push notification too (Feature #2)
           _crossAppShowPushNotif({
             customerName: customer,
             resolvedBy: who,
-            invoiceNumber: inv.invoiceNumber,
-            resolutionNote: histEntry ? histEntry.resolutionNote : null,
-            resolutionMethod: histEntry ? histEntry.resolutionMethod : null
+            invoiceNumber: ev.invoiceNumber,
+            resolutionNote: ev.resolutionNote,
+            resolutionMethod: ev.resolutionMethod
           });
         });
       } else {
