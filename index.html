@@ -7459,53 +7459,74 @@ function renderCrossAppInbox() {
   // Show up to 50 most recent
   const items = all.slice(0, 50);
   const reasonLbl = en ? _reasonLabelEn : _reasonLabelEs;
-  // Map method codes to human labels (matches TECH-TICKETS resolve modal)
-  const methodLabels = en ? {
-    card_collected: '💳 Card collected',
-    customer_paid:  '💵 Customer paid',
-    reminder_sent:  '📧 Reminder sent',
-    contacted:      '📞 Contacted customer',
-    no_contact:     '🛟 Could not reach',
-    written_off:    '🗑 Written off',
-    other:          '❔ Other'
+  // Map method codes to human labels with description (matches TECH-TICKETS resolve modal)
+  const methodInfo = en ? {
+    card_collected: { label: 'Card collected',         desc: 'Got new/updated CC info from customer',           icon: '💳' },
+    customer_paid:  { label: 'Customer paid',          desc: 'Cash, check, Zelle, etc.',                        icon: '💵' },
+    reminder_sent:  { label: 'Reminder sent',          desc: 'Sent the customer another reminder',              icon: '📧' },
+    contacted:      { label: 'Contacted customer',     desc: 'Spoke with them, follow-up scheduled',            icon: '📞' },
+    no_contact:     { label: 'Could not reach',        desc: 'Tried, no response — passed to admin',            icon: '🛟' },
+    written_off:    { label: 'Written off',            desc: 'Bad debt, not pursuing',                          icon: '🗑' },
+    other:          { label: 'Other',                  desc: 'See note for details',                            icon: '❔' }
   } : {
-    card_collected: '💳 Tarjeta recibida',
-    customer_paid:  '💵 Cliente pagó',
-    reminder_sent:  '📧 Recordatorio enviado',
-    contacted:      '📞 Cliente contactado',
-    no_contact:     '🛟 No se pudo contactar',
-    written_off:    '🗑 Dado de baja',
-    other:          '❔ Otro'
+    card_collected: { label: 'Tarjeta recibida',       desc: 'Obtuvo nueva info de tarjeta del cliente',         icon: '💳' },
+    customer_paid:  { label: 'Cliente pagó',           desc: 'Efectivo, cheque, Zelle, etc.',                    icon: '💵' },
+    reminder_sent:  { label: 'Recordatorio enviado',   desc: 'Le mandó otro recordatorio al cliente',            icon: '📧' },
+    contacted:      { label: 'Cliente contactado',     desc: 'Habló con el cliente, seguimiento agendado',       icon: '📞' },
+    no_contact:     { label: 'No se pudo contactar',   desc: 'Intentó, sin respuesta — pasó a admin',            icon: '🛟' },
+    written_off:    { label: 'Dado de baja',           desc: 'Deuda incobrable, no se sigue',                    icon: '🗑' },
+    other:          { label: 'Otro',                   desc: 'Ver nota para detalles',                           icon: '❔' }
   };
-  let html = '<div style="display:grid;gap:8px;">';
+  let html = '<div style="display:grid;gap:10px;">';
   for (const r of items) {
     const isUnread = r.ts > lastSeen;
     const time = _relativeTime(r.ts);
     const reasonText = reasonLbl(r.reason);
     const sevColor = r.severity === 'urgent' ? '#dc2626' : (r.severity === 'info' ? '#3b82f6' : '#f59e0b');
-    const methodLbl = r.resolutionMethod ? (methodLabels[r.resolutionMethod] || r.resolutionMethod) : null;
+    const m = r.resolutionMethod ? methodInfo[r.resolutionMethod] : null;
+    const noteText = r.resolutionNote && r.resolutionNote.trim();
+
     html += `
-      <div style="background:${isUnread ? '#ECFDF5' : 'white'};border:1px solid ${isUnread ? '#6EE7B7' : 'var(--border)'};border-radius:8px;padding:11px 13px;transition:all 0.15s;display:flex;gap:11px;align-items:flex-start;">
-        <div style="flex-shrink:0;margin-top:3px;">
-          ${isUnread ? '<span style="display:inline-block;width:9px;height:9px;background:#10b981;border-radius:50%;box-shadow:0 0 0 2px #d1fae5;"></span>' : '<span style="display:inline-block;width:9px;height:9px;background:#d1d5db;border-radius:50%;"></span>'}
+      <div style="background:${isUnread ? '#ECFDF5' : 'white'};border:1px solid ${isUnread ? '#6EE7B7' : 'var(--border)'};border-radius:10px;overflow:hidden;">
+        <!-- Top row: customer + reason + invoice -->
+        <div style="padding:11px 13px;display:flex;gap:11px;align-items:flex-start;cursor:pointer;" onclick="window.goToInvoiceFromInbox('${r.invoiceId}')">
+          <div style="flex-shrink:0;margin-top:3px;">
+            ${isUnread
+              ? '<span style="display:inline-block;width:9px;height:9px;background:#10b981;border-radius:50%;box-shadow:0 0 0 2px #d1fae5;"></span>'
+              : '<span style="display:inline-block;width:9px;height:9px;background:#d1d5db;border-radius:50%;"></span>'}
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-weight:700;font-size:15px;color:var(--text);">${escapeHtml(r.customerName || '—')}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px;">
+              <span style="font-size:11px;color:white;background:${sevColor};font-weight:600;padding:2px 8px;border-radius:999px;">${escapeHtml(reasonText)}</span>
+              <span style="font-size:12px;color:var(--text-soft);">${en ? 'Invoice' : 'Factura'} <b>#${escapeHtml(r.invoiceNumber || '')}</b> · <b>${fmtCurrency(r.amount || 0)}</b></span>
+            </div>
+          </div>
+          <div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
+            <button onclick="event.stopPropagation();window.openCustomerTimeline('${escapeHtml((r.customerName||'').replace(/'/g,'&#39;'))}')" title="${en ? 'See all alerts for this customer' : 'Ver historial completo del cliente'}" style="background:white;border:1px solid #d1d5db;color:#374151;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">🧵 ${en ? 'History' : 'Historial'}</button>
+          </div>
         </div>
-        <div style="flex:1;min-width:0;cursor:pointer;" onclick="window.goToInvoiceFromInbox('${r.invoiceId}')">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            <span style="font-weight:700;font-size:14px;color:var(--text);">${escapeHtml(r.customerName || '—')}</span>
-            <span style="font-size:11px;color:white;background:${sevColor};font-weight:600;padding:1px 7px;border-radius:999px;">${escapeHtml(reasonText)}</span>
+
+        <!-- Resolution panel: structured, clear, friendly -->
+        <div style="background:${isUnread ? '#d1fae5' : '#f0fdf4'};border-top:1px solid #6ee7b7;padding:11px 13px;">
+          <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#047857;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+            <span style="background:#10b981;color:white;width:18px;height:18px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;">✓</span>
+            ${en ? 'Resolved' : 'Resuelta'}
           </div>
-          <div style="font-size:12px;color:var(--text-soft);margin-top:3px;">
-            ${en ? 'Invoice' : 'Factura'} <b>#${escapeHtml(r.invoiceNumber || '')}</b> · <b>${fmtCurrency(r.amount || 0)}</b>
+          <div style="display:grid;gap:4px;font-size:13px;color:#064e3b;">
+            <div><span style="color:#047857;font-weight:600;">👤 ${en ? 'Resolved by' : 'Resolvió'}:</span> <b>${escapeHtml(r.resolvedBy || '—')}</b></div>
+            ${m ? `<div><span style="color:#047857;font-weight:600;">${m.icon} ${en ? 'Action' : 'Acción'}:</span> <b>${escapeHtml(m.label)}</b> <span style="color:#65a30d;font-size:11px;">— ${escapeHtml(m.desc)}</span></div>` : ''}
+            <div><span style="color:#047857;font-weight:600;">⏱ ${en ? 'When' : 'Cuándo'}:</span> ${escapeHtml(time)}</div>
           </div>
-          <div style="font-size:12px;color:#047857;margin-top:5px;font-weight:600;">
-            ✓ ${en ? 'Resolved by' : 'Resuelto por'} ${escapeHtml(r.resolvedBy)}${methodLbl ? ' · ' + escapeHtml(methodLbl) : ''} · ${escapeHtml(time)}
+          <div style="margin-top:10px;padding:9px 11px;background:white;border-radius:7px;border:1px solid #a7f3d0;">
+            <div style="font-size:10px;font-weight:700;letter-spacing:0.05em;color:#065f46;text-transform:uppercase;margin-bottom:4px;">💬 ${en ? `Note from ${r.resolvedBy || 'tech'}` : `Nota de ${r.resolvedBy || 'tech'}`}</div>
+            ${noteText
+              ? `<div style="font-size:13px;color:#111;line-height:1.4;font-style:italic;">"${escapeHtml(noteText)}"</div>`
+              : `<div style="font-size:12px;color:#9ca3af;font-style:italic;">${en ? 'No additional note — quick action only' : 'Sin nota adicional — solo acción rápida'}</div>`}
           </div>
-          ${r.resolutionNote ? `<div style="font-size:12px;color:#92400e;background:#fef3c7;border-left:3px solid #f59e0b;padding:6px 10px;border-radius:4px;margin-top:6px;font-style:italic;">💬 "${escapeHtml(r.resolutionNote)}"</div>` : ''}
-          ${r.publishedBy ? `<div style="font-size:10px;color:var(--text-mute);margin-top:4px;">${en ? 'You published this alert as' : 'Vos publicaste esta alerta como'} ${escapeHtml(r.publishedBy)}</div>` : ''}
-        </div>
-        <div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:flex-end;">
-          <button onclick="event.stopPropagation();window.openCustomerTimeline('${escapeHtml((r.customerName||'').replace(/'/g,'&#39;'))}')" title="${en ? 'See all alerts for this customer' : 'Ver historial completo del cliente'}" style="background:white;border:1px solid #d1d5db;color:#374151;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">🧵 ${en ? 'History' : 'Historial'}</button>
-          <span style="color:#9ca3af;font-size:18px;">›</span>
+          ${r.publishedBy ? `<div style="font-size:10px;color:#6b7280;margin-top:6px;text-align:right;">${en ? 'You published this as' : 'Vos publicaste esta como'} <b>${escapeHtml(r.publishedBy)}</b></div>` : ''}
         </div>
       </div>`;
   }
@@ -7611,18 +7632,30 @@ window.openCustomerTimeline = function(customerName) {
   const open = history.filter(h => !h.resolved).length;
   const resolved = history.filter(h => h.resolved).length;
   const reasonLbl = en ? _reasonLabelEn : _reasonLabelEs;
-  const methodLabels = en ? {
-    card_collected:'💳 Card collected', customer_paid:'💵 Customer paid', reminder_sent:'📧 Reminder sent',
-    contacted:'📞 Contacted', no_contact:'🛟 Could not reach', written_off:'🗑 Written off', other:'❔ Other'
-  } : {
-    card_collected:'💳 Tarjeta recibida', customer_paid:'💵 Cliente pagó', reminder_sent:'📧 Recordatorio enviado',
-    contacted:'📞 Contactado', no_contact:'🛟 No se pudo contactar', written_off:'🗑 Dado de baja', other:'❔ Otro'
-  };
 
   // Compute average resolution time for resolved ones
   const resolvedDurations = history.filter(h => h.resolved && h.resolvedAt && h.publishedAt).map(h => h.resolvedAt - h.publishedAt);
   const avgMs = resolvedDurations.length ? resolvedDurations.reduce((a,b)=>a+b,0) / resolvedDurations.length : 0;
   const avgHrs = Math.round(avgMs / 3600000);
+
+  // Same friendly method info as the inbox
+  const methodInfo = en ? {
+    card_collected: { label: 'Card collected',         desc: 'Got new/updated CC info from customer',   icon: '💳' },
+    customer_paid:  { label: 'Customer paid',          desc: 'Cash, check, Zelle, etc.',                icon: '💵' },
+    reminder_sent:  { label: 'Reminder sent',          desc: 'Sent the customer another reminder',      icon: '📧' },
+    contacted:      { label: 'Contacted customer',     desc: 'Spoke with them, follow-up scheduled',    icon: '📞' },
+    no_contact:     { label: 'Could not reach',        desc: 'Tried, no response — passed to admin',    icon: '🛟' },
+    written_off:    { label: 'Written off',            desc: 'Bad debt, not pursuing',                  icon: '🗑' },
+    other:          { label: 'Other',                  desc: 'See note for details',                    icon: '❔' }
+  } : {
+    card_collected: { label: 'Tarjeta recibida',       desc: 'Obtuvo nueva info de tarjeta del cliente', icon: '💳' },
+    customer_paid:  { label: 'Cliente pagó',           desc: 'Efectivo, cheque, Zelle, etc.',            icon: '💵' },
+    reminder_sent:  { label: 'Recordatorio enviado',   desc: 'Le mandó otro recordatorio al cliente',    icon: '📧' },
+    contacted:      { label: 'Cliente contactado',     desc: 'Habló con el cliente, seguimiento agendado', icon: '📞' },
+    no_contact:     { label: 'No se pudo contactar',   desc: 'Intentó, sin respuesta — pasó a admin',    icon: '🛟' },
+    written_off:    { label: 'Dado de baja',           desc: 'Deuda incobrable, no se sigue',            icon: '🗑' },
+    other:          { label: 'Otro',                   desc: 'Ver nota para detalles',                   icon: '❔' }
+  };
 
   let html = `
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
@@ -7640,29 +7673,49 @@ window.openCustomerTimeline = function(customerName) {
         <div style="font-size:22px;font-weight:700;color:var(--text);">${avgHrs}h</div>
       </div>` : ''}
     </div>
-    <div style="display:grid;gap:8px;">`;
+    <div style="display:grid;gap:10px;">`;
 
   for (const h of history) {
     const reasonText = reasonLbl(h.reason);
     const sevColor = h.severity === 'urgent' ? '#dc2626' : (h.severity === 'info' ? '#3b82f6' : '#f59e0b');
     const pubStr = _relativeTime(h.publishedAt);
+    const m = h.resolutionMethod ? methodInfo[h.resolutionMethod] : null;
+    const noteText = h.resolutionNote && h.resolutionNote.trim();
+
     html += `
-      <div style="background:white;border:1px solid var(--border);border-left:4px solid ${h.resolved ? '#10b981' : sevColor};border-radius:8px;padding:11px 13px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:11px;color:white;background:${sevColor};font-weight:600;padding:2px 8px;border-radius:999px;">${escapeHtml(reasonText)}</span>
-            ${h.resolved ? `<span style="font-size:11px;color:white;background:#10b981;font-weight:600;padding:2px 8px;border-radius:999px;">✓ ${en ? 'Resolved' : 'Resuelta'}</span>` : `<span style="font-size:11px;color:white;background:#dc2626;font-weight:600;padding:2px 8px;border-radius:999px;">${en ? 'OPEN' : 'ABIERTA'}</span>`}
+      <div style="background:white;border:1px solid var(--border);border-left:4px solid ${h.resolved ? '#10b981' : sevColor};border-radius:10px;overflow:hidden;">
+        <div style="padding:11px 13px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-size:11px;color:white;background:${sevColor};font-weight:600;padding:2px 8px;border-radius:999px;">${escapeHtml(reasonText)}</span>
+              ${h.resolved
+                ? `<span style="font-size:11px;color:white;background:#10b981;font-weight:600;padding:2px 8px;border-radius:999px;">✓ ${en ? 'Resolved' : 'Resuelta'}</span>`
+                : `<span style="font-size:11px;color:white;background:#dc2626;font-weight:600;padding:2px 8px;border-radius:999px;">${en ? 'OPEN' : 'ABIERTA'}</span>`}
+            </div>
+            <div style="font-size:11px;color:var(--text-mute);">${en ? 'Invoice' : 'Factura'} <b>#${escapeHtml(h.invoiceNumber || '')}</b> · ${fmtCurrency(h.amount || 0)}</div>
           </div>
-          <div style="font-size:11px;color:var(--text-mute);">${en ? 'Invoice' : 'Factura'} <b>#${escapeHtml(h.invoiceNumber || '')}</b> · ${fmtCurrency(h.amount || 0)}</div>
-        </div>
-        <div style="font-size:12px;color:var(--text-soft);margin-top:6px;">
-          📤 ${en ? 'Published' : 'Publicada'} ${escapeHtml(pubStr)}${h.publishedBy ? ' ' + (en ? 'by' : 'por') + ' ' + escapeHtml(h.publishedBy) : ''}
+          <div style="font-size:12px;color:var(--text-soft);margin-top:6px;">
+            📤 ${en ? 'Published' : 'Publicada'} ${escapeHtml(pubStr)}${h.publishedBy ? ' ' + (en ? 'by' : 'por') + ' <b>' + escapeHtml(h.publishedBy) + '</b>' : ''}
+          </div>
         </div>
         ${h.resolved ? `
-          <div style="font-size:12px;color:#047857;margin-top:4px;font-weight:600;">
-            ✓ ${en ? 'Resolved by' : 'Resuelta por'} ${escapeHtml(h.resolvedBy || '?')}${h.resolutionMethod ? ' · ' + escapeHtml(methodLabels[h.resolutionMethod] || h.resolutionMethod) : ''} · ${escapeHtml(_relativeTime(h.resolvedAt))}
+          <div style="background:#f0fdf4;border-top:1px solid #6ee7b7;padding:11px 13px;">
+            <div style="font-size:10px;font-weight:800;letter-spacing:0.08em;color:#047857;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+              <span style="background:#10b981;color:white;width:18px;height:18px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;">✓</span>
+              ${en ? 'Resolved' : 'Resuelta'}
+            </div>
+            <div style="display:grid;gap:4px;font-size:13px;color:#064e3b;">
+              <div><span style="color:#047857;font-weight:600;">👤 ${en ? 'Resolved by' : 'Resolvió'}:</span> <b>${escapeHtml(h.resolvedBy || '—')}</b></div>
+              ${m ? `<div><span style="color:#047857;font-weight:600;">${m.icon} ${en ? 'Action' : 'Acción'}:</span> <b>${escapeHtml(m.label)}</b> <span style="color:#65a30d;font-size:11px;">— ${escapeHtml(m.desc)}</span></div>` : ''}
+              <div><span style="color:#047857;font-weight:600;">⏱ ${en ? 'When' : 'Cuándo'}:</span> ${escapeHtml(_relativeTime(h.resolvedAt))}</div>
+            </div>
+            <div style="margin-top:10px;padding:9px 11px;background:white;border-radius:7px;border:1px solid #a7f3d0;">
+              <div style="font-size:10px;font-weight:700;letter-spacing:0.05em;color:#065f46;text-transform:uppercase;margin-bottom:4px;">💬 ${en ? `Note from ${h.resolvedBy || 'tech'}` : `Nota de ${h.resolvedBy || 'tech'}`}</div>
+              ${noteText
+                ? `<div style="font-size:13px;color:#111;line-height:1.4;font-style:italic;">"${escapeHtml(noteText)}"</div>`
+                : `<div style="font-size:12px;color:#9ca3af;font-style:italic;">${en ? 'No additional note — quick action only' : 'Sin nota adicional — solo acción rápida'}</div>`}
+            </div>
           </div>
-          ${h.resolutionNote ? `<div style="font-size:12px;color:#92400e;background:#fef3c7;border-left:3px solid #f59e0b;padding:6px 10px;border-radius:4px;margin-top:6px;font-style:italic;">💬 "${escapeHtml(h.resolutionNote)}"</div>` : ''}
         ` : ''}
       </div>`;
   }
