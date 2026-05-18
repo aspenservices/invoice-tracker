@@ -4875,6 +4875,38 @@ window.pickTicketCustomer = function(tk) {
   toast(t('toast.ticketsImported', tk.name || '', parseMsg), 'success');
 };
 
+// ════════════════════════════════════════════════════════════
+// TOKEN-BASED NAME MATCHING — handles all real-world name variations:
+//   "Bulejski, Denise and Jim"  ↔  "Denise and Jim Bulejski"   (QB flip)
+//   "Doug & Carrie Meyer"        ↔  "Meyer, Doug and Carrie"   (& vs and)
+//   "Donna B. Baranyai"          ↔  "Donna Baranyai"           (middle initial)
+//   "donna baranyai"             ↔  "Donna Baranyai"           (case)
+//
+// Strategy: normalize → split into tokens → strip stopwords + short tokens
+//           → sort alphabetically → compare. Order-agnostic, format-agnostic.
+// ════════════════════════════════════════════════════════════
+const _NAME_STOPWORDS = new Set(['and', 'or', 'the', 'a', 'an', 'y', 'e', 'de', 'di', 'del']);
+function _nameMatchTokens(name) {
+  if (!name) return [];
+  return String(name).toLowerCase()
+    .replace(/[.,&\-_'"`()\/\\]/g, ' ')   // strip punctuation
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(t => t.length >= 2 && !_NAME_STOPWORDS.has(t))
+    .sort();
+}
+function _tokensEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+function _tokensSubset(sub, sup) {
+  if (sub.length === 0) return false;
+  const supSet = new Set(sup);
+  return sub.every(t => supSet.has(t));
+}
+
 window.pickCustomer = function(id) {
   const c = allCustomers.find(x => x.id === id);
   if (!c) return;
@@ -4912,36 +4944,59 @@ window.tryAutoFillCustomerFromName = async function() {
   const allFilled = Object.values(fields).every(el => el && (el.value || '').trim());
   if (allFilled) return false;
 
-  // 1) Exact match in local customer database (case-insensitive)
-  const norm = name.toLowerCase();
-  let match = allCustomers.find(c => (c.name || '').trim().toLowerCase() === norm);
-  let source = match ? 'local' : null;
+  // ── TOKEN-BASED MATCHING (handles all the QB flip / format variations) ──
+  const qTokens = _nameMatchTokens(name);
+  if (qTokens.length === 0) return false;
 
-  // 2) Smart match (handles "Last, First" vs "First Last") — only if a SINGLE result, otherwise skip (ambiguous)
-  if (!match) {
-    const candidates = smartMatchCustomer(name, allCustomers);
-    if (candidates.length === 1) {
-      match = candidates[0];
-      source = 'local';
-    }
+  // PASS 1: EXACT token set match (same tokens regardless of order)
+  // "Denise and Jim Bulejski" tokens = ["bulejski","denise","jim"]
+  // "Bulejski, Denise and Jim"  tokens = ["bulejski","denise","jim"]  ← MATCH
+  let candidates = allCustomers.filter(c => _tokensEqual(_nameMatchTokens(c.name), qTokens));
+  let matchType = 'exact';
+
+  // PASS 2: SUBSET match — every query token is found in candidate (user typed shorter)
+  // "Donna Baranyai" subset of "Donna B Baranyai"
+  if (candidates.length === 0) {
+    candidates = allCustomers.filter(c => _tokensSubset(qTokens, _nameMatchTokens(c.name)));
+    matchType = 'partial';
   }
 
-  // 3) Fallback: search TICKETS database for exact match
+  let match = null;
+  let source = null;
+  if (candidates.length === 1) {
+    match = candidates[0];
+    source = 'local';
+  } else if (candidates.length > 1) {
+    // Ambiguous — pick the one whose token set has the SAME LENGTH as query (closest)
+    // If still ambiguous after that, abort (don't guess)
+    const sameLen = candidates.filter(c => _nameMatchTokens(c.name).length === qTokens.length);
+    if (sameLen.length === 1) { match = sameLen[0]; source = 'local'; }
+  }
+
+  // FALLBACK: search TICKETS database for token match
   if (!match) {
     try {
       const tixMatches = await searchTicketsCustomers(name);
-      const exact = tixMatches.find(t => (t.name || '').trim().toLowerCase() === norm);
-      if (exact) {
-        match = exact;
+      let tixCandidates = tixMatches.filter(t => _tokensEqual(_nameMatchTokens(t.name), qTokens));
+      if (tixCandidates.length === 0) {
+        tixCandidates = tixMatches.filter(t => _tokensSubset(qTokens, _nameMatchTokens(t.name)));
+      }
+      if (tixCandidates.length === 1) {
+        match = tixCandidates[0];
         source = 'tickets';
-      } else if (tixMatches.length === 1) {
-        match = tixMatches[0];
-        source = 'tickets';
+      } else if (tixCandidates.length > 1) {
+        const sameLen = tixCandidates.filter(t => _nameMatchTokens(t.name).length === qTokens.length);
+        if (sameLen.length === 1) { match = sameLen[0]; source = 'tickets'; }
       }
     } catch (_e) { /* network/auth failure — silent */ }
   }
 
-  if (!match) return false;
+  if (!match) {
+    console.info('[AutoFill] No unique match for', JSON.stringify(name), '— query tokens:', qTokens);
+    return false;
+  }
+
+  console.info('[AutoFill] Matched:', match.name, '(source:', source + ', type:', matchType + ')');
 
   // If the matched record has a model/serial in its spaDescription text, try to parse them out
   let parsedFromDesc = {};
@@ -4964,18 +5019,18 @@ window.tryAutoFillCustomerFromName = async function() {
   if (fillIfEmpty(fields.spaModel,     match.spaModel || parsedFromDesc.spaModel)) filledCount++;
   if (fillIfEmpty(fields.serial,       match.serialNumber || parsedFromDesc.serialNumber)) filledCount++;
 
-  // Also normalize the name field to the canonical form from the DB
-  // (e.g., user typed "donna baranyai" → fix capitalization to "Donna Baranyai")
-  if (match.name && match.name !== name && match.name.toLowerCase() === norm) {
+  // Normalize the name field to the canonical form from the DB
+  // (this is what makes the link from "Denise and Jim Bulejski" to "Bulejski, Denise and Jim" visible)
+  if (match.name && match.name !== name) {
     nameEl.value = match.name;
   }
 
-  if (filledCount > 0) {
+  if (filledCount > 0 || (match.name && match.name !== name)) {
     const en = currentLang === 'en';
     const srcLbl = source === 'tickets' ? 'TICKETS' : (en ? 'your customers' : 'tu base de clientes');
     toast(en
-      ? `✓ ${filledCount} field(s) auto-filled from ${srcLbl}`
-      : `✓ ${filledCount} campo(s) autocompletado(s) desde ${srcLbl}`,
+      ? `✓ Matched "${match.name}" — ${filledCount} field(s) auto-filled from ${srcLbl}`
+      : `✓ Match "${match.name}" — ${filledCount} campo(s) autocompletado(s) desde ${srcLbl}`,
       'success');
   }
   return filledCount > 0;
