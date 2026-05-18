@@ -1279,7 +1279,7 @@ input.field-err, textarea.field-err, select.field-err {
         <div class="field full">
           <label><span data-i18n="form.customer.name">Cliente (nombre completo)</span> <span class="req">*</span></label>
           <div class="autocomplete-wrap">
-            <input type="text" id="fCustomerName" data-i18n-ph="form.customer.namePlaceholder" placeholder="Empieza a escribir para buscar..." autocomplete="off" oninput="onCustomerInput(event)" onfocus="onCustomerInput(event)" onblur="setTimeout(()=>document.getElementById('customerSuggestions').classList.remove('open'),200)">
+            <input type="text" id="fCustomerName" data-i18n-ph="form.customer.namePlaceholder" placeholder="Empieza a escribir para buscar..." autocomplete="off" oninput="onCustomerInput(event)" onfocus="onCustomerInput(event)" onblur="setTimeout(()=>{document.getElementById('customerSuggestions').classList.remove('open');window.tryAutoFillCustomerFromName();},220)" onkeydown="if(event.key==='Enter'||event.key==='Tab'){window.tryAutoFillCustomerFromName();}">
             <div class="autocomplete-list" id="customerSuggestions"></div>
           </div>
           <span class="field-hint" data-i18n="form.customer.nameHint">Si el cliente ya existe, lo seleccionas y se autocompletan email, modelo, serial</span>
@@ -3454,6 +3454,10 @@ window.openEditModal = function(id) {
 };
 
 window.saveInvoice = async function() {
+  // Safety net: if user typed a customer name but never blurred (e.g., clicked Save directly),
+  // try to auto-fill from the customer database before reading form values.
+  try { await window.tryAutoFillCustomerFromName(); } catch(_e){}
+
   const data = {
     invoiceNumber: document.getElementById('fInvoiceNumber').value.trim(),
     amount: parseFloat(document.getElementById('fAmount').value) || 0,
@@ -4882,6 +4886,99 @@ window.pickCustomer = function(id) {
   document.getElementById('fSerial').value = c.serialNumber || '';
   document.getElementById('customerSuggestions').classList.remove('open');
   toast(currentLang === 'en' ? `Customer "${c.name}" auto-filled` : `Cliente "${c.name}" autocompletado`, 'success');
+};
+
+// ════════════════════════════════════════════════════════════
+// AUTO-FILL ON BLUR — if user types a full customer name and clicks away
+// without picking from the dropdown, we still try to auto-complete their info.
+// Only fills empty fields (never overrides what user already typed).
+// ════════════════════════════════════════════════════════════
+window.tryAutoFillCustomerFromName = async function() {
+  const nameEl = document.getElementById('fCustomerName');
+  if (!nameEl) return false;
+  const name = (nameEl.value || '').trim();
+  if (!name || name.length < 3) return false;
+
+  // The auto-fill targets (only fill these if currently empty)
+  const fields = {
+    greetingName: document.getElementById('fGreetingName'),
+    email:        document.getElementById('fCustomerEmail'),
+    phone:        document.getElementById('fCustomerPhone'),
+    spaModel:     document.getElementById('fSpaModel'),
+    serial:       document.getElementById('fSerial')
+  };
+
+  // Skip if everything's already populated (user filled manually)
+  const allFilled = Object.values(fields).every(el => el && (el.value || '').trim());
+  if (allFilled) return false;
+
+  // 1) Exact match in local customer database (case-insensitive)
+  const norm = name.toLowerCase();
+  let match = allCustomers.find(c => (c.name || '').trim().toLowerCase() === norm);
+  let source = match ? 'local' : null;
+
+  // 2) Smart match (handles "Last, First" vs "First Last") — only if a SINGLE result, otherwise skip (ambiguous)
+  if (!match) {
+    const candidates = smartMatchCustomer(name, allCustomers);
+    if (candidates.length === 1) {
+      match = candidates[0];
+      source = 'local';
+    }
+  }
+
+  // 3) Fallback: search TICKETS database for exact match
+  if (!match) {
+    try {
+      const tixMatches = await searchTicketsCustomers(name);
+      const exact = tixMatches.find(t => (t.name || '').trim().toLowerCase() === norm);
+      if (exact) {
+        match = exact;
+        source = 'tickets';
+      } else if (tixMatches.length === 1) {
+        match = tixMatches[0];
+        source = 'tickets';
+      }
+    } catch (_e) { /* network/auth failure — silent */ }
+  }
+
+  if (!match) return false;
+
+  // If the matched record has a model/serial in its spaDescription text, try to parse them out
+  let parsedFromDesc = {};
+  if (match.spaDescription && typeof parseQbNotesText === 'function') {
+    try { parsedFromDesc = parseQbNotesText(match.spaDescription) || {}; } catch(_e){}
+  }
+
+  // Fill only empty fields
+  const fillIfEmpty = (el, val) => {
+    if (!el || !val) return false;
+    if ((el.value || '').trim()) return false;
+    el.value = val;
+    return true;
+  };
+
+  let filledCount = 0;
+  if (fillIfEmpty(fields.greetingName, match.greetingName || (typeof deriveGreetingName === 'function' ? deriveGreetingName(match.name) : ''))) filledCount++;
+  if (fillIfEmpty(fields.email,        match.email)) filledCount++;
+  if (fillIfEmpty(fields.phone,        match.phone)) filledCount++;
+  if (fillIfEmpty(fields.spaModel,     match.spaModel || parsedFromDesc.spaModel)) filledCount++;
+  if (fillIfEmpty(fields.serial,       match.serialNumber || parsedFromDesc.serialNumber)) filledCount++;
+
+  // Also normalize the name field to the canonical form from the DB
+  // (e.g., user typed "donna baranyai" → fix capitalization to "Donna Baranyai")
+  if (match.name && match.name !== name && match.name.toLowerCase() === norm) {
+    nameEl.value = match.name;
+  }
+
+  if (filledCount > 0) {
+    const en = currentLang === 'en';
+    const srcLbl = source === 'tickets' ? 'TICKETS' : (en ? 'your customers' : 'tu base de clientes');
+    toast(en
+      ? `✓ ${filledCount} field(s) auto-filled from ${srcLbl}`
+      : `✓ ${filledCount} campo(s) autocompletado(s) desde ${srcLbl}`,
+      'success');
+  }
+  return filledCount > 0;
 };
 
 // ════════════════════════════════════════════════════════════
