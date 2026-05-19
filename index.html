@@ -753,6 +753,175 @@ input.field-err, textarea.field-err, select.field-err {
 .qb-parse-result.show { display: block; }
 .qb-parse-result strong { color: #064E3B; }
 
+/* ════════════════════════════════════════════════════════════
+   QB-STYLE CUSTOMER MODAL (Address Info / Spa Info / Notes tabs)
+   ════════════════════════════════════════════════════════════ */
+.modal.customer-modal-qb { max-width: 880px; }
+
+.cust-name-row {
+  margin: 0 0 12px 0;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
+  border: 1px solid #E2E8F0;
+  border-radius: var(--r-md);
+}
+.cust-name-row label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748B;
+  display: block;
+  margin-bottom: 4px;
+}
+.cust-name-row input {
+  width: 100%;
+  font-size: 15px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 8px 12px;
+  background: white;
+  font-family: inherit;
+}
+.cust-name-row .req { color: #DC2626; }
+
+/* Collapsible import tools (QB paste + TICKETS search) */
+.cust-import-tools {
+  margin-bottom: 14px;
+  border: 1px solid #BFDBFE;
+  border-radius: var(--r-md);
+  background: #EFF6FF;
+}
+.cust-import-tools[open] { padding-bottom: 12px; }
+.cust-import-tools > summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1E40AF;
+  list-style: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cust-import-tools > summary::-webkit-details-marker { display: none; }
+.cust-import-tools > summary::before {
+  content: '▸';
+  display: inline-block;
+  transition: transform 0.15s;
+}
+.cust-import-tools[open] > summary::before { transform: rotate(90deg); }
+.cust-import-tools-content {
+  padding: 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cust-import-tools .qb-paste-box { margin: 0; }
+
+/* QB-style sidebar + content layout */
+.cust-tabs-container {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.cust-tabs-sidebar {
+  flex: 0 0 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--r-md);
+  padding: 6px;
+}
+.cust-tab-btn {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  color: #64748B;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: inherit;
+}
+.cust-tab-btn:hover { background: #E2E8F0; color: var(--text); }
+.cust-tab-btn.active {
+  background: white;
+  color: var(--text);
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.cust-tab-content {
+  flex: 1;
+  min-width: 0;
+}
+.cust-tab-panel { display: none; }
+.cust-tab-panel.active { display: block; }
+
+.cust-section-header {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748B;
+  margin: 14px 0 8px 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #E2E8F0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cust-tab-panel > .cust-section-header:first-child,
+.cust-tab-panel > div:first-child > .cust-section-header { margin-top: 0; }
+
+.cust-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 18px;
+}
+.cust-tab-panel .field { margin-bottom: 10px; }
+.cust-tab-panel .field:last-child { margin-bottom: 0; }
+.cust-tab-panel .field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  display: block;
+  margin-bottom: 4px;
+}
+.cust-tab-panel .field input,
+.cust-tab-panel .field textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  font-family: inherit;
+  background: white;
+}
+.cust-tab-panel .field input:focus,
+.cust-tab-panel .field textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* Mobile: tabs become horizontal at top */
+@media (max-width: 700px) {
+  .cust-tabs-container { flex-direction: column; }
+  .cust-tabs-sidebar { flex: 0 0 auto; flex-direction: row; flex-wrap: wrap; }
+  .cust-tab-btn { flex: 1; min-width: 100px; justify-content: center; text-align: center; }
+  .cust-two-col { grid-template-columns: 1fr; }
+}
+
 /* Payment status pill on invoice card */
 .payment-pill {
   display: inline-flex;
@@ -1443,98 +1612,144 @@ input.field-err, textarea.field-err, select.field-err {
 
 <!-- CUSTOMER ADD/EDIT MODAL -->
 <div class="modal-backdrop" id="customerModal">
-  <div class="modal modal-lg">
+  <div class="modal modal-lg customer-modal-qb">
     <div class="modal-header">
       <span class="modal-title" id="customerFormTitle">Agregar cliente</span>
       <button class="modal-close" onclick="closeModal('customerModal')">×</button>
     </div>
     <div class="modal-body">
-      <!-- IMPORT FROM TICKETS -->
-      <div style="margin-bottom:14px; padding:12px 14px; background:#EFF6FF; border:1px solid #BFDBFE; border-radius:var(--r-md);">
-        <div style="font-size:12px;font-weight:700;color:#1E40AF;margin-bottom:6px;">🔌 Importar desde TICKETS database</div>
-        <div style="display:flex;gap:8px;">
-          <input type="text" id="cTixSearch" placeholder="Buscar por apellido o nombre…" style="flex:1;padding:8px 10px;border:1px solid #BFDBFE;border-radius:var(--r-sm);font-size:13px;" oninput="window.searchTixForImport(event)">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('cTixSearch').value='';document.getElementById('cTixResults').innerHTML='';">Limpiar</button>
-        </div>
-        <div id="cTixResults" style="margin-top:8px;"></div>
+      <!-- ─── Customer name (always visible, prominent like QB) ─── -->
+      <div class="cust-name-row">
+        <label>Nombre del cliente <span class="req">*</span> <span style="font-weight:400;color:#94A3B8;font-size:10px;text-transform:none;letter-spacing:0;">(formato QuickBooks: Apellido, Nombre)</span></label>
+        <input type="text" id="cName" placeholder="Ej. Lewis, Cyndi & John" autocomplete="off">
       </div>
 
-      <!-- QB NOTES PASTE BOX -->
-      <div class="qb-paste-box">
-        <div class="qb-paste-title">📋 Pegar notas de QuickBooks (opcional)</div>
-        <div class="qb-paste-hint">Copia el bloque NOTES de la ficha del cliente en QB y pégalo aquí. El sistema extrae modelo, dirección, serial, board, heater, topside, etc.</div>
-        <textarea id="qbNotesInput" placeholder="2010 Pinnacle VS              7009
-Chaulkstone
-Del: 9/27/2010                Oakville, MO
-Ordered: 9/10/2010            63129
-38 WW, grey storm series jets
-2 Marathon pumps - 1- 8.4/3.0 amp; 1- 8 amp
-Balboa VS501(54356)
-#5435631009070013
-Board#20100902
-Heater# 58083 1009030022
-Topside Ser# 33326 1008130010
-Single Light w/ color lenses
-Mahogany Durawood..."></textarea>
-        <div class="qb-paste-actions">
-          <button class="btn btn-primary btn-sm" onclick="window.parseQbNotes()">⚡ Parsear y autollenar</button>
-          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('qbNotesInput').value=''">Limpiar</button>
-        </div>
-        <div class="qb-parse-result" id="qbParseResult"></div>
-      </div>
+      <!-- ─── Collapsible Import Tools (auto-open when adding, closed when editing) ─── -->
+      <details class="cust-import-tools" id="custImportTools">
+        <summary>🔌 Herramientas de importación (QuickBooks Notes / TICKETS database)</summary>
+        <div class="cust-import-tools-content">
+          <!-- TICKETS search -->
+          <div>
+            <div style="font-size:11px;font-weight:700;color:#1E40AF;margin-bottom:4px;">🔎 Importar desde TICKETS database</div>
+            <div style="display:flex;gap:8px;">
+              <input type="text" id="cTixSearch" placeholder="Buscar por apellido o nombre…" style="flex:1;padding:7px 10px;border:1px solid #BFDBFE;border-radius:var(--r-sm);font-size:13px;background:white;" oninput="window.searchTixForImport(event)">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('cTixSearch').value='';document.getElementById('cTixResults').innerHTML='';">Limpiar</button>
+            </div>
+            <div id="cTixResults" style="margin-top:8px;"></div>
+          </div>
 
-      <div class="form-grid">
-        <div class="field full">
-          <label>Nombre completo <span class="req">*</span></label>
-          <input type="text" id="cName" placeholder="Ej. Reynaldo, Alberto" autocomplete="off">
+          <!-- QB NOTES PASTE BOX -->
+          <div class="qb-paste-box" style="margin:0;">
+            <div class="qb-paste-title">📋 Pegar notas de QuickBooks</div>
+            <div class="qb-paste-hint">Copia el bloque NOTES de la ficha del cliente en QB y pégalo aquí. El sistema extrae modelo, dirección, serial, board, heater, topside, etc.</div>
+            <textarea id="qbNotesInput" placeholder="2010 Pinnacle VS              7009&#10;Chaulkstone&#10;Del: 9/27/2010                Oakville, MO&#10;Ordered: 9/10/2010            63129&#10;…"></textarea>
+            <div class="qb-paste-actions">
+              <button class="btn btn-primary btn-sm" onclick="window.parseQbNotes()">⚡ Parsear y autollenar</button>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('qbNotesInput').value=''">Limpiar</button>
+            </div>
+            <div class="qb-parse-result" id="qbParseResult"></div>
+          </div>
         </div>
-        <div class="field">
-          <label>Nombre para saludo</label>
-          <input type="text" id="cGreeting" placeholder="Auto desde nombre" autocomplete="off">
+      </details>
+
+      <!-- ─── QB-Style Tabbed content ─── -->
+      <div class="cust-tabs-container">
+        <div class="cust-tabs-sidebar" role="tablist">
+          <button type="button" class="cust-tab-btn active" data-tab="address" onclick="window.switchCustomerTab('address')">📇 Address Info</button>
+          <button type="button" class="cust-tab-btn"        data-tab="spa"     onclick="window.switchCustomerTab('spa')">🛁 Spa Info</button>
+          <button type="button" class="cust-tab-btn"        data-tab="notes"   onclick="window.switchCustomerTab('notes')">📝 Notas</button>
         </div>
-        <div class="field">
-          <label>Email <span style="color:var(--text-mute);font-size:11px;font-weight:400;">(opcional)</span></label>
-          <input type="email" id="cEmail" placeholder="cliente@email.com" autocomplete="off">
-        </div>
-        <div class="field">
-          <label>Teléfono</label>
-          <input type="text" id="cPhone" placeholder="314-XXX-XXXX" autocomplete="off">
-        </div>
-        <div class="field">
-          <label>Modelo del spa</label>
-          <input type="text" id="cSpaModel" placeholder="Ej. 2014 El Dorado ES" autocomplete="off">
-        </div>
-        <div class="field full">
-          <label>Dirección</label>
-          <input type="text" id="cAddress" placeholder="Ej. 9017 St. Louis Ave, St. Louis, MO 63114" autocomplete="off">
-        </div>
-        <div class="field">
-          <label>Número de serie del spa</label>
-          <input type="text" id="cSerial" placeholder="Ej. 9534" autocomplete="off">
-        </div>
-        <div class="field">
-          <label>Modelo del cabinet/heater</label>
-          <input type="text" id="cCabinet" placeholder="Ej. ACC 2000" autocomplete="off">
-        </div>
-        <div class="field">
-          <label>Board #</label>
-          <input type="text" id="cBoard" placeholder="Ej. 20100902" autocomplete="off">
-        </div>
-        <div class="field">
-          <label>Heater #</label>
-          <input type="text" id="cHeater" placeholder="Ej. 58083 1009030022" autocomplete="off">
-        </div>
-        <div class="field">
-          <label>Topside Ser #</label>
-          <input type="text" id="cTopside" placeholder="Ej. 33326 1008130010" autocomplete="off">
-        </div>
-        <div class="field full">
-          <label>Notas QuickBooks (texto completo de referencia)</label>
-          <textarea id="cQbRaw" placeholder="Se llena automáticamente al parsear. Se guarda como referencia." style="font-family:'JetBrains Mono',monospace;font-size:11px;min-height:70px;"></textarea>
-        </div>
-        <div class="field full">
-          <label>Notas internas</label>
-          <textarea id="cNotes" placeholder="Información adicional del cliente"></textarea>
+
+        <div class="cust-tab-content">
+          <!-- TAB: ADDRESS INFO -->
+          <div class="cust-tab-panel active" data-panel="address">
+            <div class="field">
+              <label>Saludo (Hi ___,)</label>
+              <input type="text" id="cGreeting" placeholder="Auto desde el nombre completo" autocomplete="off">
+            </div>
+
+            <div class="cust-two-col">
+              <div>
+                <div class="cust-section-header">📞 Teléfonos</div>
+                <div class="field">
+                  <label>Main Phone</label>
+                  <input type="text" id="cPhone" placeholder="314-XXX-XXXX" autocomplete="off">
+                </div>
+                <div class="field">
+                  <label>Mobile</label>
+                  <input type="text" id="cMobilePhone" placeholder="Celular (opcional)" autocomplete="off">
+                </div>
+                <div class="field">
+                  <label>Alt. Phone</label>
+                  <input type="text" id="cAltPhone" placeholder="Alterno (opcional)" autocomplete="off">
+                </div>
+              </div>
+              <div>
+                <div class="cust-section-header">📧 Emails</div>
+                <div class="field">
+                  <label>Main Email</label>
+                  <input type="email" id="cEmail" placeholder="cliente@email.com" autocomplete="off">
+                </div>
+                <div class="field">
+                  <label>CC Email</label>
+                  <input type="email" id="cCcEmail" placeholder="Email secundario (opcional)" autocomplete="off">
+                </div>
+              </div>
+            </div>
+
+            <div class="cust-section-header">📍 Dirección (Invoice / Bill To)</div>
+            <div class="field">
+              <textarea id="cAddress" rows="3" placeholder="Cyndi &amp; John Lewis&#10;40 Gateview Ct.&#10;Wentzville, MO 63385"></textarea>
+            </div>
+          </div>
+
+          <!-- TAB: SPA INFO -->
+          <div class="cust-tab-panel" data-panel="spa">
+            <div class="cust-section-header">🛁 Spa principal</div>
+            <div class="cust-two-col">
+              <div class="field">
+                <label>Modelo del spa</label>
+                <input type="text" id="cSpaModel" placeholder="Ej. 2014 El Dorado ES" autocomplete="off">
+              </div>
+              <div class="field">
+                <label>Número de serie</label>
+                <input type="text" id="cSerial" placeholder="Ej. 9534" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="cust-section-header">⚙️ Componentes</div>
+            <div class="cust-two-col">
+              <div class="field">
+                <label>Cabinet / Heater Type</label>
+                <input type="text" id="cCabinet" placeholder="Ej. ACC 2000" autocomplete="off">
+              </div>
+              <div class="field">
+                <label>Board #</label>
+                <input type="text" id="cBoard" placeholder="Ej. 20100902" autocomplete="off">
+              </div>
+              <div class="field">
+                <label>Heater #</label>
+                <input type="text" id="cHeater" placeholder="Ej. 58083 1009030022" autocomplete="off">
+              </div>
+              <div class="field">
+                <label>Topside Ser #</label>
+                <input type="text" id="cTopside" placeholder="Ej. 33326 1008130010" autocomplete="off">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB: NOTES -->
+          <div class="cust-tab-panel" data-panel="notes">
+            <div class="cust-section-header">📝 Notas internas</div>
+            <div class="field">
+              <textarea id="cNotes" rows="4" placeholder="Información adicional del cliente (preferencias, historial, etc.)"></textarea>
+            </div>
+
+            <div class="cust-section-header">📋 Notas QuickBooks (texto raw de referencia)</div>
+            <div class="field">
+              <textarea id="cQbRaw" rows="6" placeholder="Se llena automáticamente al parsear. Se guarda como referencia." style="font-family:'JetBrains Mono',monospace;font-size:11px;"></textarea>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2887,10 +3102,34 @@ async function autoCreateCustomerFromInvoice(invoiceData) {
 function findCustomerByName(name) {
   if (!name) return null;
   const norm = name.trim().toLowerCase();
-  // Exact match first
+  // 1. Exact match first (fastest)
   let m = allCustomers.find(c => (c.name || '').trim().toLowerCase() === norm);
   if (m) return m;
-  // Comma-flipped match: "Bailey, Meghan" vs "Meghan Bailey"
+
+  // 2. TOKEN-BASED MATCHING — handles QB flip, & vs and, middle initials, etc.
+  //    "Joel Svoboda"  ↔  "Svoboda, Joel"            → MATCH
+  //    "Bulejski, Denise and Jim"  ↔  "Denise and Jim Bulejski"  → MATCH
+  //    Uses the same _nameMatchTokens / _tokensEqual / _tokensSubset helpers as the auto-fill.
+  if (typeof _nameMatchTokens === 'function') {
+    const qTokens = _nameMatchTokens(name);
+    if (qTokens.length > 0) {
+      // 2a. Exact token set match
+      let cands = allCustomers.filter(c => _tokensEqual(_nameMatchTokens(c.name), qTokens));
+      if (cands.length === 1) return cands[0];
+      // 2b. Subset match (query tokens ⊂ candidate tokens) — user typed less than the canonical name
+      if (cands.length === 0) {
+        cands = allCustomers.filter(c => _tokensSubset(qTokens, _nameMatchTokens(c.name)));
+        if (cands.length === 1) return cands[0];
+        // Tie-break: pick the one with same token count (closest match)
+        if (cands.length > 1) {
+          const sameLen = cands.filter(c => _nameMatchTokens(c.name).length === qTokens.length);
+          if (sameLen.length === 1) return sameLen[0];
+        }
+      }
+    }
+  }
+
+  // 3. Legacy fallback: comma-flipped exact match
   if (norm.includes(',')) {
     const flipped = norm.split(',').map(s => s.trim()).reverse().join(' ').replace(/\s+/g, ' ');
     m = allCustomers.find(c => (c.name || '').trim().toLowerCase().replace(/,/g, '').replace(/\s+/g, ' ') === flipped);
@@ -3866,6 +4105,9 @@ window.handlePdfUpload = async function(event) {
     if (realFields.length > 0) {
       applyExtractedFields(extracted);
       showExtractedBanner(realFields.length, null);
+      // Safety net: also fire the token-based customer lookup (catches cases where the customer
+      // is in TICKETS DB but not local, OR the PDF customer name format differs from the local DB)
+      try { await window.tryAutoFillCustomerFromName(); } catch(_e){ console.warn('[PDF→AutoFill]', _e); }
     } else {
       showExtractedBanner(0, extracted._error || null);
     }
@@ -5039,14 +5281,23 @@ window.tryAutoFillCustomerFromName = async function() {
 // ════════════════════════════════════════════════════════════
 // MODAL DE CLIENTE
 // ════════════════════════════════════════════════════════════
+window.switchCustomerTab = function(tabName) {
+  document.querySelectorAll('.cust-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabName));
+  document.querySelectorAll('.cust-tab-panel').forEach(p => p.classList.toggle('active', p.dataset.panel === tabName));
+};
+
 window.openAddCustomerModal = function() {
   editingCustomerId = null;
   document.getElementById('customerFormTitle').textContent = 'Agregar cliente';
   document.getElementById('customerSaveBtn').textContent = 'Guardar';
   document.getElementById('customerDeleteBtn').style.display = 'none';
-  ['cName','cGreeting','cEmail','cPhone','cSpaModel','cAddress','cSerial','cCabinet','cBoard','cHeater','cTopside','cQbRaw','cNotes','qbNotesInput','cTixSearch'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['cName','cGreeting','cEmail','cCcEmail','cPhone','cMobilePhone','cAltPhone','cSpaModel','cAddress','cSerial','cCabinet','cBoard','cHeater','cTopside','cQbRaw','cNotes','qbNotesInput','cTixSearch'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('qbParseResult').classList.remove('show');
   document.getElementById('cTixResults').innerHTML = '';
+  // Reset to first tab + auto-open import tools (we're starting from scratch)
+  window.switchCustomerTab('address');
+  const tools = document.getElementById('custImportTools');
+  if (tools) tools.open = true;
   document.getElementById('customerModal').classList.add('open');
   setTimeout(() => document.getElementById('cName').focus(), 100);
 };
@@ -5061,7 +5312,10 @@ window.openEditCustomerModal = async function(id) {
   document.getElementById('cName').value = c.name || '';
   document.getElementById('cGreeting').value = c.greetingName || '';
   document.getElementById('cEmail').value = c.email || '';
+  document.getElementById('cCcEmail').value = c.ccEmail || '';
   document.getElementById('cPhone').value = c.phone || '';
+  document.getElementById('cMobilePhone').value = c.mobilePhone || '';
+  document.getElementById('cAltPhone').value = c.altPhone || '';
   document.getElementById('cSpaModel').value = c.spaModel || '';
   document.getElementById('cAddress').value = c.address || '';
   document.getElementById('cSerial').value = c.serialNumber || '';
@@ -5075,6 +5329,10 @@ window.openEditCustomerModal = async function(id) {
   document.getElementById('cTixSearch').value = '';
   document.getElementById('cTixResults').innerHTML = '';
   document.getElementById('qbParseResult').classList.remove('show');
+  // Reset to Address Info tab + collapse import tools (editing existing data)
+  window.switchCustomerTab('address');
+  const tools = document.getElementById('custImportTools');
+  if (tools) tools.open = false;
   document.getElementById('customerModal').classList.add('open');
   
   // ─── AUTO-SEARCH TICKETS for missing data ──────────────────
@@ -5192,7 +5450,10 @@ window.saveCustomer = async function() {
     name: document.getElementById('cName').value.trim(),
     greetingName: document.getElementById('cGreeting').value.trim(),
     email: document.getElementById('cEmail').value.trim(),
+    ccEmail: document.getElementById('cCcEmail').value.trim(),
     phone: document.getElementById('cPhone').value.trim(),
+    mobilePhone: document.getElementById('cMobilePhone').value.trim(),
+    altPhone: document.getElementById('cAltPhone').value.trim(),
     spaModel: document.getElementById('cSpaModel').value.trim(),
     address: document.getElementById('cAddress').value.trim(),
     serialNumber: document.getElementById('cSerial').value.trim(),
@@ -5210,6 +5471,10 @@ window.saveCustomer = async function() {
   // Email format check only if provided (email is OPTIONAL)
   if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
     toast(currentLang === 'en' ? 'Invalid email format' : 'Formato de email inválido', 'error');
+    return;
+  }
+  if (data.ccEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.ccEmail)) {
+    toast(currentLang === 'en' ? 'Invalid CC email format' : 'Formato de CC email inválido', 'error');
     return;
   }
   if (editingCustomerId) {
@@ -7142,8 +7407,11 @@ window.openCustomerDetail = async function(idOrName) {
       <span class="cd-row-value ${val ? (mono ? 'mono' : '') : 'empty'}">${val ? escapeHtml(val) : '— sin dato —'}</span>
     </div>`;
   document.getElementById('cdContactGrid').innerHTML = `
-    ${cdRow('Email', c?.email)}
-    ${cdRow('Teléfono', c?.phone)}
+    ${cdRow('Main Email', c?.email)}
+    ${cdRow('CC Email', c?.ccEmail)}
+    ${cdRow('Main Phone', c?.phone)}
+    ${cdRow('Mobile', c?.mobilePhone)}
+    ${cdRow('Alt. Phone', c?.altPhone)}
     ${cdRow('Dirección', c?.address)}
     ${cdRow('Saludo (Hi __)', c?.greetingName)}
     ${cdRow('Modelo del spa', c?.spaModel)}
