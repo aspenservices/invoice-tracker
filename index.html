@@ -5644,40 +5644,9 @@ function calculateWarranty({ spaModel, deliveryDate, serviceDate, specialItem })
 
 function parseQbNotesText(raw) {
   if (!raw) return null;
-  const txt = raw.replace(/\r/g, '');
-  const rawLines = txt.split('\n');
-
-  // Step 1: split into left/right columns
-  const leftLines = [];
-  const rightLines = [];
-  for (const ln of rawLines) {
-    if (!ln.trim()) continue;
-    // Find a gap of 2+ spaces — indicates two columns on this line
-    const m = ln.match(/^(\s*)(.+?)(\s{2,})(.+?)\s*$/);
-    if (m && m[2].trim() && m[4].trim()) {
-      // Two-column line
-      const leftIndent = m[1].length;
-      const left = m[2].trim();
-      const right = m[4].trim();
-      // If the left side starts with significant indent, treat the whole thing as right-only
-      if (leftIndent > 20) {
-        rightLines.push((m[2] + m[3] + m[4]).trim());
-      } else {
-        leftLines.push(left);
-        rightLines.push(right);
-      }
-    } else {
-      // Single-column line. Use indentation: 20+ leading spaces → right column.
-      const indent = ln.match(/^\s*/)[0].length;
-      const content = ln.trim();
-      if (indent > 20) rightLines.push(content);
-      else leftLines.push(content);
-    }
-  }
-
-  // Combined view (both streams) for fallback search
-  const lines = [...leftLines, ...rightLines];
-  const allTxt = lines.join('\n');
+  const txt = raw.replace(/\r/g, '').trim();
+  if (!txt) return null;
+  const rawLines = txt.split('\n').map(l => l.trimEnd()).filter(l => l.trim());
 
   const out = {
     spaModel: '', address: '', serialNumber: '', boardNumber: '',
@@ -5686,166 +5655,176 @@ function parseQbNotesText(raw) {
     extras: []
   };
 
-  function afterLabel(line, regex) {
-    const m = line.match(regex);
-    return m ? m[1].trim() : '';
+  // ════════════════════════════════════════════════════
+  // PHASE 1: LABEL-BASED EXTRACTION (high confidence)
+  // Handles NEW QB format: "Spa Model: 2011 Pinnacle GS",
+  // "Cabinet Material: Durawood   Cabinet Color: Cedar", etc.
+  // ════════════════════════════════════════════════════
+  // Extract value AFTER a known label. Stops at:
+  //   - 2+ spaces (column break)
+  //   - end of line
+  //   - another known label
+  function extractLabel(text, labelSrc) {
+    const stopAtOtherLabel = '(?=\\s+(?:Acrylic|Cabinet\\s*(?:Material|Color)|Spa\\s*Model|Del(?:ivered)?|Ordered|Board|Heater|Topside|Pump|Serial|Address|Stereo|Wifi|Lights?|Pillow|Pack)\\s*[:=#])';
+    const re = new RegExp(
+      `(?:^|\\s)(?:${labelSrc})\\s*[:=#]\\s*([^\\n]+?)(?:\\s{2,}|${stopAtOtherLabel}|$)`,
+      'i'
+    );
+    const m = text.match(re);
+    if (!m) return '';
+    return m[1].trim().replace(/[,;]+$/, '');
   }
 
-  // Helper: lines that look like dates/labels — skip these for street detection
-  const looksLikeDate = (l) => /\d{1,2}\/\d{1,2}\/\d{2,4}/.test(l) || /^(Del|Ordered):/i.test(l);
-  const looksLikeLabel = (l) => /^(Del|Ordered|Board|Heater|Topside|#)/i.test(l);
-  const looksLikeSpec = (l) => /(jets?|pumps?|\bamp\b|\bhp\b|durawood|mahogany|cedar|lighting|\blight\b|control|salt|audio|wifi)/i.test(l);
+  // Run label extraction line-by-line
+  for (const ln of rawLines) {
+    if (!out.spaModel)      out.spaModel      = extractLabel(ln, 'Spa\\s*Model');
+    if (!out.delivered)     out.delivered     = extractLabel(ln, 'Del(?:ivered)?');
+    if (!out.ordered)       out.ordered       = extractLabel(ln, 'Ordered');
+    if (!out.boardNumber)   out.boardNumber   = extractLabel(ln, 'Board');
+    if (!out.heaterNumber)  out.heaterNumber  = extractLabel(ln, 'Heater');
+    if (!out.topsideNumber) out.topsideNumber = extractLabel(ln, 'Topside(?:\\s*Ser(?:ial)?)?');
+    if (!out.serialNumber) {
+      const v = extractLabel(ln, 'Serial');
+      const d = v.match(/\d{3,}/);
+      if (d) out.serialNumber = d[0];
+    }
+  }
 
-  // 1. SPA MODEL — first left-column line that starts with a year and contains spa-ish words
-  for (const l of leftLines) {
-    if (!out.spaModel && /^(19|20)\d{2}\s+[A-Za-z]/.test(l)) {
-      // Reject pure dates and reject lines that look like "Del: ..."
-      if (!looksLikeDate(l) && !/^Del|^Order/i.test(l)) {
-        out.spaModel = l.trim();
+  // Cabinet — combine "Cabinet Material" + "Cabinet Color" if both present
+  let cabMat = '', cabColor = '';
+  for (const ln of rawLines) {
+    if (!cabMat)   cabMat   = extractLabel(ln, 'Cabinet\\s*Material');
+    if (!cabColor) cabColor = extractLabel(ln, 'Cabinet\\s*Color');
+  }
+  if (cabMat && cabColor) out.cabinet = `${cabMat} / ${cabColor}`;
+  else if (cabMat)        out.cabinet = cabMat;
+  else if (cabColor)      out.cabinet = cabColor;
+
+  // ════════════════════════════════════════════════════
+  // PHASE 2: POSITIONAL FALLBACK (old format)
+  // Only runs for fields NOT found in Phase 1.
+  // ════════════════════════════════════════════════════
+  const leftLines = [], rightLines = [];
+  for (const ln of rawLines) {
+    const m = ln.match(/^(\s*)(.+?)(\s{2,})(.+?)\s*$/);
+    if (m && m[2].trim() && m[4].trim()) {
+      leftLines.push(m[2].trim());
+      rightLines.push(m[4].trim());
+    } else {
+      const indent = ln.match(/^\s*/)[0].length;
+      const c = ln.trim();
+      if (indent > 20) rightLines.push(c); else leftLines.push(c);
+    }
+  }
+  const allLines = [...leftLines, ...rightLines];
+
+  // Helper: does the line look like a "Label: value" line we already parsed?
+  const isLabelLine = (l) => /^(?:Spa\s*Model|Cabinet\s*(?:Material|Color)|Acrylic\s*Color|Del(?:ivered)?\s*[:=]|Ordered\s*[:=]|Board\s*[#:=]|Heater\s*[#:=]|Topside.*?[#:=]|Serial.*?[#:=]|Address\s*[:=])/i.test(l);
+
+  // Spa Model fallback: line starting with year + word
+  if (!out.spaModel) {
+    for (const l of leftLines) {
+      if (/^(19|20)\d{2}\s+[A-Za-z]/.test(l) && !/^(Del|Ord)/i.test(l)) {
+        out.spaModel = l.trim(); break;
+      }
+    }
+  }
+
+  // Serial fallback: line starting with "# 1234567" or pure 10+ digit line
+  if (!out.serialNumber) {
+    for (const l of allLines) {
+      const m = l.match(/^#\s*([0-9]{4,})/);
+      if (m) { out.serialNumber = m[1]; break; }
+    }
+  }
+  if (!out.serialNumber) {
+    const dig = allLines.find(l => /^\d{10,}$/.test(l));
+    if (dig) out.serialNumber = dig;
+  }
+
+  // ════════════════════════════════════════════════════
+  // ADDRESS — STRICT MODE.
+  // Only fill if we find a real "City, ST Zip" pattern.
+  // (Notes usually don't contain addresses — those live in
+  // the QB customer card itself, not the NOTES block. So
+  // we'd rather leave address empty than guess wrong.)
+  // ════════════════════════════════════════════════════
+  const cityStateZipRe = /^([A-Z][A-Za-z\.\s]+?),\s*([A-Z]{2})\s+(\d{5})(?:-\d{4})?$/;
+  const streetRe       = /^(\d{2,6})\s+([A-Z][A-Za-z\.][a-zA-Z\s\.]{2,40})$/;
+
+  let streetLine = '', cityLine = '';
+  let cityNoZip = '', zipOnly = '';
+  for (const l of allLines) {
+    if (isLabelLine(l)) continue;
+    if (!streetLine) {
+      const m = l.match(streetRe);
+      if (m) {
+        const num = parseInt(m[1], 10);
+        const looksLikeYear = num >= 1900 && num <= 2099;
+        const looksLikeSpa = /(Pinnacle|Eldorado|El\s+Dorado|VS|GS|ES|SS|Plus|Pro|Vista|Summit)\s*$/i.test(m[2]);
+        if (!looksLikeYear && !looksLikeSpa) streetLine = `${m[1]} ${m[2].trim()}`;
+      }
+    }
+    if (!cityLine) {
+      const m = l.match(cityStateZipRe);
+      if (m) cityLine = `${m[1].trim()}, ${m[2]} ${m[3]}`;
+    }
+    // City+State on its own line (no zip yet), e.g. "Oakville, MO"
+    if (!cityNoZip) {
+      const m = l.match(/^([A-Z][A-Za-z\.\s]+?),\s*([A-Z]{2})$/);
+      if (m) cityNoZip = `${m[1].trim()}, ${m[2]}`;
+    }
+    // Standalone 5-digit zip on its own line
+    if (!zipOnly && /^\d{5}(-\d{4})?$/.test(l)) zipOnly = l;
+  }
+  // If we didn't get the full city,state,zip on one line, try to combine fragments
+  if (!cityLine && cityNoZip && zipOnly) cityLine = `${cityNoZip} ${zipOnly}`;
+  else if (!cityLine && cityNoZip) cityLine = cityNoZip;
+
+  // Only set address if we have a city line (most reliable marker).
+  // Bare street without city is too risky → leave empty.
+  if (cityLine && streetLine) out.address = `${streetLine}\n${cityLine}`;
+  else if (cityLine)          out.address = cityLine;
+
+  // Pack
+  if (!out.pack) {
+    for (const l of allLines) {
+      const m = l.match(/(Balboa[^,\n]*|Gecko[^,\n]*|ACC[^,\n]*?\d|Smart[\s]?Touch[^,\n]*|in\.[a-z]+[^,\n]*)/i);
+      if (m) { out.pack = m[1].trim(); break; }
+    }
+  }
+
+  // Jets, pumps
+  for (const l of allLines) {
+    if (!out.jets && /\d+\s*(WW|jets?)\b/i.test(l) && !isLabelLine(l)) out.jets = l;
+    if (!out.pumps && /pumps?/i.test(l) && /(amp|hp)/i.test(l)) out.pumps = l;
+  }
+
+  // Cabinet fallback (only if Phase 1 didn't find it)
+  if (!out.cabinet) {
+    for (const l of allLines) {
+      if (isLabelLine(l)) continue;
+      if (/durawood|mahogany|cedar|chestnut/i.test(l)) {
+        out.cabinet = l.replace(/^Cabinet\s*Material\s*[:=]\s*/i, '').trim();
         break;
       }
     }
   }
 
-  // 2. ADDRESS — assemble flexibly. Address can come in various shapes:
-  //    - Full street line "9017 St. Louis Ave" (one line, anywhere)
-  //    - Split: street # in right column, name in another line, city/state, zip
-  //    - Single line "City, ST 12345"
-  let streetFull = '', streetNum = '', streetName = '', cityState = '', zip = '';
-  const cityStateZipRe = /^([A-Z][A-Za-z\.\s]+?),\s+([A-Z]{2})\s+(\d{5})(-\d{4})?$/;
-  const cityStateRe = /^([A-Z][A-Za-z\.\s]+?),\s+([A-Z]{2})$/;
-  const allOrdered = [...rightLines, ...leftLines]; // prefer right-column hits first
-
-  // Pass A: Full street line — "9017 St. Louis Ave" or "123 Main St"
-  for (const l of allOrdered) {
-    if (l === out.spaModel) continue;
-    if (looksLikeDate(l) || looksLikeLabel(l) || looksLikeSpec(l)) continue;
-    if (cityStateRe.test(l) || cityStateZipRe.test(l)) continue;
-    // Skip lines that look like a spa model (year + brand-like word)
-    if (/^(19|20)\d{2}\s+[A-Z]/.test(l)) continue;
-    const m = l.match(/^(\d{2,6})\s+([A-Z][A-Za-z\.\s]+?)$/);
-    if (m && !streetFull) {
-      streetFull = `${m[1]} ${m[2].trim()}`;
-      streetNum = m[1];
-      streetName = m[2].trim();
-      break;
-    }
-  }
-
-  // Pass B: city/state and zip
-  for (const l of allOrdered) {
-    if (!cityState) {
-      const m = l.match(cityStateZipRe);
-      if (m) { cityState = `${m[1].trim()}, ${m[2]}`; zip = m[3]; continue; }
-      const m2 = l.match(cityStateRe);
-      if (m2 && !looksLikeSpec(l)) { cityState = `${m2[1].trim()}, ${m2[2]}`; }
-    }
-    if (!zip && /^\d{5}(-\d{4})?$/.test(l)) zip = l;
-  }
-
-  // Pass C: If we don't have a full street yet, assemble from fragments
-  if (!streetFull) {
-    // Street number from right column (avoid lines containing dates)
-    for (const l of rightLines) {
-      if (looksLikeDate(l)) continue;
-      if (!streetNum && /^\d{2,6}$/.test(l)) { streetNum = l; break; }
-    }
-    // Street name candidate — single-line capitalized phrase, not in spec/label set
-    if (!streetName) {
-      for (const l of allOrdered) {
-        if (!l) continue;
-        if (looksLikeDate(l) || looksLikeLabel(l) || looksLikeSpec(l)) continue;
-        if (l === out.spaModel) continue;
-        if (cityStateRe.test(l) || cityStateZipRe.test(l)) continue;
-        if (/^\d{5}(-\d{4})?$/.test(l)) continue;
-        if (/^\d/.test(l)) continue; // skip lines starting with digits
-        if (l.length > 30) continue; // streets are usually short
-        // 1-3 capitalized words — likely a street name fragment
-        if (/^[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z\.]+){0,2}$/.test(l)) {
-          streetName = l;
-          break;
-        }
-      }
-    }
-    if (streetNum && streetName) streetFull = `${streetNum} ${streetName}`;
-    else if (streetNum) streetFull = streetNum;
-    else if (streetName) streetFull = streetName;
-  }
-
-  // Build final address
-  const addrParts = [];
-  if (streetFull) addrParts.push(streetFull);
-  if (cityState) addrParts.push(zip ? `${cityState} ${zip}` : cityState);
-  else if (zip && !addrParts.length) addrParts.push(zip);
-  out.address = addrParts.join(', ');
-
-  // 3. Delivered / Ordered dates
-  for (const l of lines) {
-    const d = afterLabel(l, /Del:\s*([\d\/\-]+)/i);
-    if (d && !out.delivered) out.delivered = d;
-    const o = afterLabel(l, /Ordered:\s*([\d\/\-]+)/i);
-    if (o && !out.ordered) out.ordered = o;
-  }
-
-  // 4. Pack
-  for (const l of lines) {
-    const m = l.match(/(Balboa[^,\n]*|Gecko[^,\n]*|ACC[^,\n]*?\d|Smart[\s]?Touch[^,\n]*|in\.[a-z]+[^,\n]*)/i);
-    if (m) { out.pack = m[1].trim(); break; }
-  }
-
-  // 5. Serial — multiple patterns
-  // a) "SERIAL # 15626" or "Serial: 15626" or "S/N 15626" (4+ digits)
-  for (const l of lines) {
-    const m = l.match(/(?:SERIAL|Serial|S\/N|SN)\s*[:#]?\s*(\d{4,})/);
-    if (m) { out.serialNumber = m[1]; break; }
-  }
-  // b) Line starting with # (e.g. "# 1234567")
-  if (!out.serialNumber) {
-    for (const l of lines) {
-      const m = l.match(/^#\s*([0-9]{4,})/);
-      if (m) { out.serialNumber = m[1]; break; }
-    }
-  }
-  // c) A standalone line of pure digits (10+) — fallback
-  if (!out.serialNumber) {
-    const dig = lines.find(l => /^\d{10,}$/.test(l));
-    if (dig) out.serialNumber = dig;
-  }
-
-  // 6. Board# / Heater# / Topside Ser#
-  for (const l of lines) {
-    const b = afterLabel(l, /Board\s*#\s*:?\s*([0-9A-Za-z\s\-]+?)$/i);
-    if (b && !out.boardNumber) out.boardNumber = b.trim();
-
-    const h = afterLabel(l, /Heater\s*#\s*:?\s*([0-9A-Za-z\s\-]+?)$/i);
-    if (h && !out.heaterNumber) out.heaterNumber = h.trim();
-
-    const t = afterLabel(l, /Topside\s*(?:Ser)?\s*#?\s*:?\s*([0-9A-Za-z\s\-]+?)$/i);
-    if (t && !out.topsideNumber && /\d/.test(t)) out.topsideNumber = t.trim();
-  }
-
-  // 7. Jets, pumps, cabinet (durawood / mahogany)
-  for (const l of lines) {
-    if (!out.jets && /jets?/i.test(l) && !/Topside|Board|Heater/i.test(l)) out.jets = l;
-    if (!out.pumps && /pumps?/i.test(l) && /(amp|hp)/i.test(l)) out.pumps = l;
-    if (!out.cabinet && /durawood|mahogany|cedar|chestnut/i.test(l)) out.cabinet = l;
-  }
-
-  // 8. Extras — collect remaining unmatched left-column lines
-  const matched = new Set([
-    out.spaModel, out.delivered, out.ordered, out.pack,
-    out.serialNumber, out.cabinet, out.jets, out.pumps,
-    streetNum, streetName, cityState, zip
+  // Extras
+  const usedValues = new Set([
+    out.spaModel, out.cabinet, out.delivered, out.ordered, out.pack,
+    out.serialNumber, out.boardNumber, out.heaterNumber, out.topsideNumber,
+    out.jets, out.pumps, streetLine, cityLine
   ].filter(Boolean));
   for (const l of leftLines) {
-    if (!l || matched.has(l)) continue;
-    if (/^(Del|Ordered|Heater|Board|Topside|#)/i.test(l)) continue;
-    if (/^\d+$/.test(l)) continue;
+    if (!l || isLabelLine(l)) continue;
+    if (usedValues.has(l)) continue;
     if (l === out.spaModel) continue;
-    // Strip any embedded right-column number from the model line
-    if (l.startsWith(out.spaModel) && l !== out.spaModel) continue;
-    if (out.extras.length < 8) out.extras.push(l);
+    if (/^\d+$/.test(l)) continue;
+    if (out.extras.length < 10) out.extras.push(l);
   }
+
   return out;
 }
 
