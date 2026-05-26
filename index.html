@@ -8577,6 +8577,30 @@ async function pollCrossAppResolves() {
             console.warn('[CrossAppPoll] Persist failed:', e);
           }
         }
+
+        // ── Mark the invoice PAID when TECH-TICKETS closed it as "paid-in-app" ──
+        // (Alberto/Celia collected the payment in the field app → reflect it here.)
+        if (flds.resolutionMethod === 'paid-in-app' && matchedInv.status !== 'paid') {
+          try {
+            const now = Date.now();
+            const paidHist = [...(matchedInv.history || []), {
+              ts: now, action: 'paid', via: 'tech-tickets',
+              resolvedBy: flds.resolvedBy || null,
+              note: 'Marked paid from TECH-TICKETS'
+            }];
+            matchedInv.status = 'paid';
+            matchedInv.paidAt = now;
+            matchedInv.history = paidHist;
+            await updateInvoiceData(matchedInv.id, { status: 'paid', paidAt: now, history: paidHist });
+            const _enPaid = currentLang === 'en';
+            toast(_enPaid
+              ? `💵 Invoice #${matchedInv.invoiceNumber} marked PAID (by ${flds.resolvedBy || 'Tech team'})`
+              : `💵 Factura #${matchedInv.invoiceNumber} marcada PAGADA (por ${flds.resolvedBy || 'Equipo Tech'})`,
+              'success');
+          } catch (e) {
+            console.warn('[CrossAppPoll] Auto mark-paid failed:', e);
+          }
+        }
       }
 
       // If this event wasn't in our previous cache, it's "new" → toast + push
