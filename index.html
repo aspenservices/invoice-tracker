@@ -111,6 +111,165 @@ textarea { resize: vertical; min-height: 80px; }
 .stat-card.warn { background: var(--followup-bg); border-color: rgba(217,119,6,0.2); }
 .stat-card.warn .stat-value { color: var(--followup); }
 
+/* ════════════════════════════════════════════════════════════
+   DASHBOARD KPI VIEW (Nela's personal collections dashboard)
+   Cards: green = good, amber = attention, red = critical, neutral = info
+   ════════════════════════════════════════════════════════════ */
+.dash-header { margin-bottom: 16px; }
+.dash-header h2 { font-size: 20px; font-weight: 800; margin: 0 0 4px; color: var(--text); letter-spacing: -0.02em; }
+.dash-header p { font-size: 13px; color: var(--text-soft); margin: 0; }
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.dash-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-xs);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  min-height: 116px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.dash-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.dash-card .dash-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-mute);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.dash-card .dash-value {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--text);
+  margin-top: 10px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.dash-card .dash-meta {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin-top: 8px;
+  line-height: 1.4;
+}
+.dash-card.green { background: var(--sent-bg); border-color: rgba(22,163,74,0.25); }
+.dash-card.green .dash-value { color: var(--sent); }
+.dash-card.amber { background: var(--followup-bg); border-color: rgba(217,119,6,0.25); }
+.dash-card.amber .dash-value { color: var(--followup); }
+.dash-card.red { background: var(--pending-bg); border-color: rgba(220,38,38,0.25); }
+.dash-card.red .dash-value { color: var(--pending); }
+.dash-card.neutral .dash-value { color: var(--text); }
+
+.dash-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.dash-delta.up { background: var(--sent-bg); color: var(--sent); }
+.dash-delta.down { background: var(--pending-bg); color: var(--pending); }
+.dash-delta.flat { background: var(--bg-soft); color: var(--text-soft); }
+
+.dash-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-soft);
+  margin: 18px 0 10px;
+}
+
+.dash-top-list {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.dash-top-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-soft);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.dash-top-row:last-child { border-bottom: none; }
+.dash-top-row:hover { background: var(--bg-soft); }
+.dash-top-rank {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-soft);
+  color: var(--text-soft);
+  font-weight: 800;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.dash-top-row:first-child .dash-top-rank { background: var(--pending); color: white; }
+.dash-top-row:nth-child(2) .dash-top-rank { background: var(--followup); color: white; }
+.dash-top-info { flex: 1; min-width: 0; }
+.dash-top-name {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-top-meta { font-size: 11px; color: var(--text-mute); margin-top: 2px; }
+.dash-top-amount {
+  font-weight: 800;
+  color: var(--pending);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.dash-empty {
+  background: var(--sent-bg);
+  border: 1px solid rgba(22,163,74,0.2);
+  border-radius: var(--r-lg);
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--sent);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .dash-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .dash-card { padding: 14px 16px; min-height: 100px; }
+  .dash-card .dash-value { font-size: 24px; }
+  .dash-card .dash-label { font-size: 10px; }
+  .dash-card .dash-meta { font-size: 11px; }
+  .dash-top-row { padding: 12px 14px; gap: 10px; }
+  .dash-top-amount { font-size: 14px; }
+  .dash-header h2 { font-size: 18px; }
+}
+@media (max-width: 420px) {
+  .dash-grid { grid-template-columns: 1fr; }
+  .dash-card .dash-value { font-size: 28px; }
+}
+
 /* ALERTS BAR */
 .alerts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
 .alert-row {
@@ -1392,6 +1551,7 @@ input.field-err, textarea.field-err, select.field-err {
 
   <!-- TABS -->
   <div class="tabs" id="tabs">
+    <button class="tab" data-filter="dashboard"><span data-i18n="tab.dashboard">📊 My Dashboard</span></button>
     <button class="tab" data-filter="today"><span data-i18n="tab.today">🌅 Hoy</span> <span class="tab-count" id="cntTodayTab" style="background:var(--pending);color:white;">0</span></button>
     <button class="tab" data-filter="senttoday"><span data-i18n="tab.senttoday">📤 Enviadas hoy</span> <span class="tab-count" id="cntSentTodayTab" style="background:#0284C7;color:white;">0</span></button>
     <button class="tab active" data-filter="all"><span data-i18n="tab.all">Todas</span> <span class="tab-count" id="cntAll">0</span></button>
@@ -3686,6 +3846,10 @@ function computeAndRender() {
   document.getElementById('invoiceList').style.display = 'flex';
   document.getElementById('customerView').style.display = 'none';
   
+  if (currentFilter === 'dashboard') {
+    renderDashboardView();
+    return;
+  }
   if (currentFilter === 'today') {
     renderTodayView();
     return;
@@ -10715,6 +10879,219 @@ function renderSentTodayView() {
 // ════════════════════════════════════════════════════════════
 // UNCONFIRMED ALERTS BANNER — shows when there are alerts >24h old not confirmed
 // ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// PERSONAL KPI DASHBOARD — Nela's at-a-glance view of her collections.
+// Six KPIs: collection rate this month, avg days to collect (90d window),
+// total pending $, collected this week $, week-over-week delta, and the
+// top 5 customers with the most outstanding balance.
+// Colors: green = healthy, amber = attention needed, red = critical.
+// ════════════════════════════════════════════════════════════
+function _dashComputeKPIs() {
+  const now = Date.now();
+  const today = new Date();
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
+  const sevenDaysAgo = now - 7 * 86400000;
+  const fourteenDaysAgo = now - 14 * 86400000;
+  const ninetyDaysAgo = now - 90 * 86400000;
+
+  const invs = Array.isArray(allInvoices) ? allInvoices : [];
+
+  // KPI 1 — Collection rate this month
+  // Of invoices created in the current calendar month, what % are now paid?
+  const createdThisMonth = invs.filter(i => (i.createdAt || 0) >= monthStart);
+  const paidThisMonth = createdThisMonth.filter(i => deriveStatus(i) === 'paid');
+  const collectionRate = createdThisMonth.length > 0
+    ? Math.round((paidThisMonth.length / createdThisMonth.length) * 100)
+    : null;
+
+  // KPI 2 — Average days to collect (rolling 90 days of paid invoices)
+  // Only counts invoices with both sentAt and paidAt — others are noise.
+  const paidRecent = invs.filter(i =>
+    deriveStatus(i) === 'paid' &&
+    i.sentAt && i.paidAt &&
+    i.paidAt >= ninetyDaysAgo
+  );
+  let avgDays = null;
+  if (paidRecent.length > 0) {
+    const totalDays = paidRecent.reduce(
+      (sum, i) => sum + Math.max(0, (i.paidAt - i.sentAt) / 86400000), 0
+    );
+    avgDays = Math.round(totalDays / paidRecent.length);
+  }
+
+  // KPI 3 — Total pending ($) — every invoice not yet paid
+  const pendingInvs = invs.filter(i => deriveStatus(i) !== 'paid');
+  const totalPending = pendingInvs.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+
+  // KPI 4 — Collected this week ($) — paidAt within last 7 days
+  const collectedThisWeek = invs
+    .filter(i => i.paidAt && i.paidAt >= sevenDaysAgo)
+    .reduce((s, i) => s + (Number(i.amount) || 0), 0);
+
+  // KPI 5 — Week-over-week delta — last week = 8-14 days ago
+  const collectedLastWeek = invs
+    .filter(i => i.paidAt && i.paidAt >= fourteenDaysAgo && i.paidAt < sevenDaysAgo)
+    .reduce((s, i) => s + (Number(i.amount) || 0), 0);
+
+  let weekDeltaPct = null;
+  let weekDirection = 'flat';
+  if (collectedLastWeek > 0) {
+    weekDeltaPct = Math.round(((collectedThisWeek - collectedLastWeek) / collectedLastWeek) * 100);
+    if (weekDeltaPct > 0) weekDirection = 'up';
+    else if (weekDeltaPct < 0) weekDirection = 'down';
+    else weekDirection = 'flat';
+  } else if (collectedThisWeek > 0) {
+    weekDirection = 'new'; // nothing last week to compare against
+  } else {
+    weekDirection = 'none'; // nothing either week
+  }
+
+  // KPI 6 — Top 5 customers with most pending
+  const custMap = new Map();
+  pendingInvs.forEach(i => {
+    const name = (i.customerName || '').trim() || '(unknown)';
+    if (!custMap.has(name)) custMap.set(name, { name, total: 0, count: 0 });
+    const c = custMap.get(name);
+    c.total += Number(i.amount) || 0;
+    c.count++;
+  });
+  const topCustomers = Array.from(custMap.values())
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+
+  return {
+    collectionRate, createdCount: createdThisMonth.length, paidCount: paidThisMonth.length,
+    avgDays, paidRecentCount: paidRecent.length,
+    totalPending, pendingCount: pendingInvs.length,
+    collectedThisWeek, collectedLastWeek, weekDeltaPct, weekDirection,
+    topCustomers
+  };
+}
+
+function renderDashboardView() {
+  const list = document.getElementById('invoiceList');
+  const en = currentLang === 'en';
+  const k = _dashComputeKPIs();
+
+  // ─── KPI 1: Collection rate this month ───
+  let rateClass = 'neutral';
+  let rateValue = '—';
+  let rateMeta = en ? 'No invoices created this month yet' : 'Sin facturas creadas este mes';
+  if (k.collectionRate !== null) {
+    rateValue = k.collectionRate + '%';
+    rateMeta = en
+      ? `${k.paidCount} of ${k.createdCount} invoice${k.createdCount !== 1 ? 's' : ''} paid`
+      : `${k.paidCount} de ${k.createdCount} factura${k.createdCount !== 1 ? 's' : ''} pagadas`;
+    if (k.collectionRate >= 70) rateClass = 'green';
+    else if (k.collectionRate >= 50) rateClass = 'amber';
+    else rateClass = 'red';
+  }
+
+  // ─── KPI 2: Average days to collect ───
+  let daysClass = 'neutral';
+  let daysValue = '—';
+  let daysMeta = en ? 'No paid invoices in the last 90 days' : 'Sin pagos en los últimos 90 días';
+  if (k.avgDays !== null) {
+    daysValue = k.avgDays + (en ? ' days' : ' días');
+    daysMeta = en
+      ? `Average across ${k.paidRecentCount} paid invoice${k.paidRecentCount !== 1 ? 's' : ''} (90-day window)`
+      : `Promedio de ${k.paidRecentCount} factura${k.paidRecentCount !== 1 ? 's' : ''} pagada${k.paidRecentCount !== 1 ? 's' : ''} (ventana 90 días)`;
+    if (k.avgDays <= 14) daysClass = 'green';
+    else if (k.avgDays <= 30) daysClass = 'amber';
+    else daysClass = 'red';
+  }
+
+  // ─── KPI 3: Total pending $ ───
+  const pendingClass = k.totalPending > 0 ? 'amber' : 'neutral';
+  const pendingMeta = en
+    ? `${k.pendingCount} open invoice${k.pendingCount !== 1 ? 's' : ''}`
+    : `${k.pendingCount} factura${k.pendingCount !== 1 ? 's' : ''} abierta${k.pendingCount !== 1 ? 's' : ''}`;
+
+  // ─── KPI 4 + 5: Collected this week + week-over-week delta ───
+  const weekClass = k.collectedThisWeek > 0 ? 'green' : 'neutral';
+  let deltaPill = '';
+  let weekMeta;
+  if (k.weekDirection === 'up') {
+    deltaPill = `<span class="dash-delta up">▲ ${k.weekDeltaPct}%</span>`;
+    weekMeta = en
+      ? `vs ${fmtCurrency(k.collectedLastWeek)} last week`
+      : `vs ${fmtCurrency(k.collectedLastWeek)} sem. anterior`;
+  } else if (k.weekDirection === 'down') {
+    deltaPill = `<span class="dash-delta down">▼ ${Math.abs(k.weekDeltaPct)}%</span>`;
+    weekMeta = en
+      ? `vs ${fmtCurrency(k.collectedLastWeek)} last week`
+      : `vs ${fmtCurrency(k.collectedLastWeek)} sem. anterior`;
+  } else if (k.weekDirection === 'flat') {
+    deltaPill = `<span class="dash-delta flat">= 0%</span>`;
+    weekMeta = en
+      ? `Same as last week (${fmtCurrency(k.collectedLastWeek)})`
+      : `Igual a sem. anterior (${fmtCurrency(k.collectedLastWeek)})`;
+  } else if (k.weekDirection === 'new') {
+    deltaPill = `<span class="dash-delta up">▲ ${en ? 'new' : 'nuevo'}</span>`;
+    weekMeta = en ? 'Nothing was collected last week' : 'Nada cobrado la semana anterior';
+  } else {
+    weekMeta = en ? 'Nothing collected in the last 2 weeks' : 'Sin cobros en las últimas 2 semanas';
+  }
+
+  // ─── HEADER + CARDS ───
+  let html = `
+    <div class="dash-header">
+      <h2>📊 ${en ? 'My Dashboard' : 'Mi Dashboard'}</h2>
+      <p>${en ? 'Personal collection KPIs · updates in real time' : 'KPIs personales de cobranza · tiempo real'}</p>
+    </div>
+    <div class="dash-grid">
+      <div class="dash-card ${rateClass}">
+        <div class="dash-label"><span>${en ? 'Collection rate · this month' : 'Tasa de cobro · este mes'}</span></div>
+        <div class="dash-value">${rateValue}</div>
+        <div class="dash-meta">${rateMeta}</div>
+      </div>
+      <div class="dash-card ${daysClass}">
+        <div class="dash-label"><span>${en ? 'Avg days to collect' : 'Días promedio para cobrar'}</span></div>
+        <div class="dash-value">${daysValue}</div>
+        <div class="dash-meta">${daysMeta}</div>
+      </div>
+      <div class="dash-card ${pendingClass}">
+        <div class="dash-label"><span>${en ? 'Total pending' : 'Total pendiente'}</span></div>
+        <div class="dash-value">${fmtCurrency(k.totalPending)}</div>
+        <div class="dash-meta">${pendingMeta}</div>
+      </div>
+      <div class="dash-card ${weekClass}">
+        <div class="dash-label"><span>${en ? 'Collected this week' : 'Cobrado esta semana'}</span>${deltaPill}</div>
+        <div class="dash-value">${fmtCurrency(k.collectedThisWeek)}</div>
+        <div class="dash-meta">${weekMeta}</div>
+      </div>
+    </div>
+    <div class="dash-section-title">🏆 ${en ? 'Top 5 customers · most outstanding' : 'Top 5 clientes · más pendiente'}</div>
+  `;
+
+  // ─── TOP 5 CUSTOMERS LIST ───
+  if (k.topCustomers.length === 0) {
+    html += `<div class="dash-empty">🎉 ${en ? 'No outstanding balances — all caught up!' : 'Sin saldos pendientes — todo al día!'}</div>`;
+  } else {
+    html += `<div class="dash-top-list">`;
+    k.topCustomers.forEach((c, idx) => {
+      // Escape for HTML attribute + JS string literal (same pattern as renderProblemView)
+      const safeName = escapeHtml(c.name).replace(/'/g, "\\'");
+      const countLabel = en
+        ? `${c.count} open invoice${c.count !== 1 ? 's' : ''}`
+        : `${c.count} factura${c.count !== 1 ? 's' : ''} abierta${c.count !== 1 ? 's' : ''}`;
+      html += `
+        <div class="dash-top-row" onclick="window.openCustomerDetail('${safeName}')">
+          <div class="dash-top-rank">${idx + 1}</div>
+          <div class="dash-top-info">
+            <div class="dash-top-name">${escapeHtml(c.name)}</div>
+            <div class="dash-top-meta">${countLabel}</div>
+          </div>
+          <div class="dash-top-amount">${fmtCurrency(c.total)}</div>
+        </div>
+      `;
+    });
+    html += `</div>`;
+  }
+
+  list.innerHTML = html;
+}
+
 // ════════════════════════════════════════════════════════════
 // TECHS PERFORMANCE DASHBOARD — per-technician stats
 // ════════════════════════════════════════════════════════════
