@@ -1644,7 +1644,7 @@ input.field-err, textarea.field-err, select.field-err {
         <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">
           <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;">
             📁 <span id="qbRecUploadLbl">Subir Excel/CSV</span>
-            <input type="file" id="qbRecFile" accept=".csv,.txt,.tsv,.xlsx,.xls" style="display:none;" onchange="window.qbRecLoadFile(event)">
+            <input type="file" id="qbRecFile" accept=".csv,.txt,.tsv,.xlsx,.xls,.xlsm,.xlsb" style="display:none;" onchange="window.qbRecLoadFile(event)">
           </label>
           <span style="flex:1;"></span>
           <button class="btn btn-primary" onclick="window.qbRecParse()" id="qbRecParseBtn">⚡ <span id="qbRecParseLbl">Analizar</span></button>
@@ -8205,7 +8205,7 @@ window.qbRecLoadFile = async function(event) {
   if (!file) return;
   const en = currentLang === 'en';
   const name = (file.name || '').toLowerCase();
-  const isExcel = /\.xlsx?$/.test(name);
+  const isExcel = /\.(xlsx|xlsm|xlsb|xls)$/i.test(name);
   const msgEl = document.getElementById('qbRecParseMsg');
   if (isExcel) {
     // Excel (.xlsx/.xls) needs a parser — lazy-load SheetJS only when needed.
