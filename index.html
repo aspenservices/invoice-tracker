@@ -1299,6 +1299,9 @@ input.field-err, textarea.field-err, select.field-err {
 
   <!-- SYNC WARNING (shown only when NOT connected to Firebase) -->
   <div id="syncWarning" style="display:none;align-items:center;gap:14px;padding:14px 18px;margin-bottom:16px;background:#FFF7ED;border:1px solid #FED7AA;border-left:4px solid #C2410C;border-radius:var(--r-md);color:#9A3412;font-size:13px;font-weight:600;"></div>
+  <!-- RECONCILE NUDGE — reminds Nela to import QB payments so paid invoices
+       don't pile up as stale-open (fights the "rely only on resolve cycle" gap) -->
+  <div id="reconcileNudge" style="display:none;align-items:center;gap:14px;padding:13px 18px;margin-bottom:16px;border-radius:var(--r-md);font-size:13px;font-weight:600;"></div>
 
   <!-- UNCONFIRMED ALERTS BANNER (alerts >24h old that were never confirmed sent) -->
   <div id="unconfirmedBanner" style="display:none;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;margin-bottom:16px;background:#FEF3C7;border:1px solid #FDE047;border-left:4px solid #CA8A04;border-radius:var(--r-md);color:#854D0E;font-size:13px;font-weight:600;"></div>
@@ -3385,12 +3388,89 @@ function getStageCopyPlain(stage) {
 }
 
 // ════════════════════════════════════════════════════════════
+// RECONCILE TRACKING + NUDGE
+// Records when QB reconciliation last ran, and nudges Nela when it's been
+// too long — because the resolve cycle only closes ALERTED invoices, the
+// bulk of paid invoices only close via QB reconcile. If she doesn't do it
+// regularly, stale-open invoices pile up.
+// ════════════════════════════════════════════════════════════
+const RECONCILE_KEY = 'aspenLastReconcile';
+function getLastReconcile() {
+  try { return JSON.parse(localStorage.getItem(RECONCILE_KEY) || 'null'); }
+  catch (_e) { return null; }
+}
+function setLastReconcile(count) {
+  try {
+    localStorage.setItem(RECONCILE_KEY, JSON.stringify({
+      at: Date.now(),
+      by: (typeof getInvoiceTrackerUser === 'function' ? getInvoiceTrackerUser() : '') || '',
+      count: count || 0
+    }));
+  } catch (_e) {}
+  renderReconcileNudge();
+}
+// How many open invoices are "stale" — open and older than N days, so likely
+// already paid in QB but never reconciled here.
+function _staleOpenCount(days) {
+  const cutoff = Date.now() - (days || 14) * 86400000;
+  return (allInvoices || []).filter(i => {
+    if (i.status === 'paid') return false;
+    const created = i.createdAt || i.sentAt || 0;
+    return created > 0 && created < cutoff;
+  }).length;
+}
+function renderReconcileNudge() {
+  const el = document.getElementById('reconcileNudge');
+  if (!el) return;
+  const en = currentLang === 'en';
+  const openCount = (allInvoices || []).filter(i => i.status !== 'paid').length;
+  // Nothing open → nothing to nudge about
+  if (openCount === 0) { el.style.display = 'none'; return; }
+  const last = getLastReconcile();
+  const now = Date.now();
+  const days = last && last.at ? Math.floor((now - last.at) / 86400000) : null;
+  const stale = _staleOpenCount(14);
+
+  // Decide urgency. never reconciled OR >14d = red; 7-14d = amber; <7d = hide
+  let bg, border, color, icon, msg;
+  if (days === null) {
+    bg = '#FEF2F2'; border = '#FCA5A5'; color = '#991B1B'; icon = '🔄';
+    msg = en
+      ? `You've never reconciled with QuickBooks. You have <b>${openCount}</b> open invoice${openCount !== 1 ? 's' : ''}${stale ? ` (<b>${stale}</b> older than 2 weeks — likely already paid)` : ''}.`
+      : `Nunca has reconciliado con QuickBooks. Tienes <b>${openCount}</b> factura${openCount !== 1 ? 's' : ''} abierta${openCount !== 1 ? 's' : ''}${stale ? ` (<b>${stale}</b> de más de 2 semanas — probablemente ya pagadas)` : ''}.`;
+  } else if (days >= 14) {
+    bg = '#FEF2F2'; border = '#FCA5A5'; color = '#991B1B'; icon = '⚠️';
+    msg = en
+      ? `It's been <b>${days} days</b> since you reconciled with QB. <b>${openCount}</b> open${stale ? `, <b>${stale}</b> likely already paid` : ''} — close them in bulk.`
+      : `Hace <b>${days} días</b> que no reconcilias con QB. <b>${openCount}</b> abiertas${stale ? `, <b>${stale}</b> probablemente ya pagadas` : ''} — ciérralas en bloque.`;
+  } else if (days >= 7) {
+    bg = '#FFFBEB'; border = '#FDE68A'; color = '#92400E'; icon = '🔔';
+    msg = en
+      ? `<b>${days} days</b> since last QB reconcile · <b>${openCount}</b> open. A good time to import QB payments.`
+      : `<b>${days} días</b> desde la última reconciliación · <b>${openCount}</b> abiertas. Buen momento para importar pagos de QB.`;
+  } else {
+    // Recently reconciled — show a calm confirmation, not a nag
+    bg = '#F0FDF4'; border = '#86EFAC'; color = '#065F46'; icon = '✓';
+    const whenTxt = days === 0 ? (en ? 'today' : 'hoy') : (en ? `${days}d ago` : `hace ${days}d`);
+    el.style.cssText = `display:flex;align-items:center;gap:12px;padding:10px 16px;margin-bottom:16px;border-radius:8px;font-size:12px;font-weight:600;background:${bg};border:1px solid ${border};color:${color};`;
+    el.innerHTML = `<span>${icon}</span><span style="flex:1;">${en ? 'Last reconciled with QB' : 'Última reconciliación con QB'} <b>${whenTxt}</b>${last.count ? ` · ${last.count} ${en ? 'closed' : 'cerradas'}` : ''}.</span>
+      <button onclick="window.openQbReconcile()" style="background:transparent;border:1px solid ${color};color:${color};padding:5px 11px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">🔄 ${en ? 'Reconcile' : 'Reconciliar'}</button>`;
+    return;
+  }
+  el.style.cssText = `display:flex;align-items:center;gap:12px;padding:13px 18px;margin-bottom:16px;border-radius:10px;font-size:13px;font-weight:600;background:${bg};border:1.5px solid ${border};color:${color};`;
+  el.innerHTML = `<span style="font-size:18px;">${icon}</span>
+    <span style="flex:1;line-height:1.45;">${msg}</span>
+    <button onclick="window.openQbReconcile()" style="background:${color};color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;">🔄 ${en ? 'Reconcile now' : 'Reconciliar ahora'}</button>`;
+}
+
+// ════════════════════════════════════════════════════════════
 // RENDERING
 // ════════════════════════════════════════════════════════════
 function computeAndRender() {
   const sorted = [...allInvoices].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   // Refresh the cross-app inbox badge — picks up new resolutions that arrived via Firebase realtime
   try { if (typeof updateCrossAppInboxBadge === 'function') updateCrossAppInboxBadge(); } catch(_e){}
+  try { renderReconcileNudge(); } catch(_e){}
   
   // Stats
   const now = Date.now();
@@ -8184,22 +8264,45 @@ window.qbRecParse = function() {
   // Render review step
   const listEl = document.getElementById('qbRecList');
   const sumEl = document.getElementById('qbRecSummary');
+  const parsedCount = parsed.rows.length;
+  const openCount = openInvoices.length;
   if (!matches.length) {
-    sumEl.innerHTML = `<span style="color:var(--sent);">✓ ${en ? 'Nothing to reconcile — your app already matches QB. 🎉' : 'Nada que reconciliar — tu app ya coincide con QB. 🎉'}</span>`;
-    listEl.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-soft);font-size:13px;">${en ? 'All ' + openInvoices.length + ' open invoices accounted for.' : 'Las ' + openInvoices.length + ' facturas abiertas están al día.'}</div>`;
+    sumEl.innerHTML = `<span style="color:var(--sent);">✓ ${en ? 'Nothing to reconcile — your app already matches QB. 🎉' : 'Nada que reconciliar — tu app ya coincide con QB. 🎉'}</span><div style="font-size:11px;color:var(--text-soft);font-weight:400;margin-top:4px;">${en ? 'Read' : 'Leí'} ${parsedCount} ${en ? 'rows from QB' : 'filas de QB'} · ${openCount} ${en ? 'open invoices in app' : 'facturas abiertas en la app'}</div>`;
+    listEl.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-soft);font-size:13px;">${en ? 'All ' + openCount + ' open invoices accounted for.' : 'Las ' + openCount + ' facturas abiertas están al día.'}</div>`;
     document.getElementById('qbRecApplyBtn').style.display = 'none';
   } else {
     const totalAmt = matches.reduce((s, m) => s + (m.appAmount || 0), 0);
-    sumEl.innerHTML = en
+    // ── SAFETY GUARD (Open Invoices mode) ──
+    // If a suspiciously high share of open invoices would be marked paid, the
+    // pasted report was probably TRUNCATED (only part of the rows copied).
+    // Warn loudly and leave everything UNCHECKED so nothing is applied by accident.
+    let truncationWarn = '';
+    let preCheck = true;
+    if (mode === 'open' && openCount > 0) {
+      const ratio = matches.length / openCount;
+      if (ratio > 0.4) {
+        preCheck = false;
+        truncationWarn = `<div style="margin-bottom:10px;padding:10px 12px;background:#FEF2F2;border:2px solid #FCA5A5;border-radius:8px;color:#991B1B;font-size:12px;line-height:1.5;">
+          ⚠️ <b>${en ? 'Heads up' : 'Cuidado'}:</b> ${en
+            ? `this would mark <b>${matches.length} of ${openCount}</b> open invoices as paid (${Math.round(ratio*100)}%). That's a lot — your QB paste may have been <b>cut off</b>. I left everything <b>unchecked</b>. Re-copy the FULL report (all rows) and try again, or check only the ones you're sure about.`
+            : `esto marcaría <b>${matches.length} de ${openCount}</b> facturas abiertas como pagadas (${Math.round(ratio*100)}%). Es mucho — tu copia de QB pudo haberse <b>cortado</b>. Dejé todo <b>sin marcar</b>. Vuelve a copiar el reporte COMPLETO (todas las filas) e intenta de nuevo, o marca solo las que estés segura.`}
+        </div>`;
+      }
+    }
+    sumEl.innerHTML = (en
       ? `Found <b>${matches.length}</b> invoice${matches.length !== 1 ? 's' : ''} that appear <b>PAID</b> in QB but still open here — total <b>${fmtCurrency(totalAmt)}</b>. Review and apply:`
-      : `Encontré <b>${matches.length}</b> factura${matches.length !== 1 ? 's' : ''} que aparecen <b>PAGADAS</b> en QB pero abiertas aquí — total <b>${fmtCurrency(totalAmt)}</b>. Revisa y aplica:`;
+      : `Encontré <b>${matches.length}</b> factura${matches.length !== 1 ? 's' : ''} que aparecen <b>PAGADAS</b> en QB pero abiertas aquí — total <b>${fmtCurrency(totalAmt)}</b>. Revisa y aplica:`)
+      + `<div style="font-size:11px;color:var(--text-soft);font-weight:400;margin-top:4px;">${en ? 'Read' : 'Leí'} ${parsedCount} ${en ? 'rows from QB' : 'filas de QB'} · ${openCount} ${en ? 'open in app' : 'abiertas en app'}</div>`
+      + truncationWarn
+      + (matches.length > 8 ? `<input type="text" id="qbRecSearch" oninput="window.qbRecFilter()" placeholder="${en ? '🔍 Filter by name or invoice #…' : '🔍 Filtrar por nombre o # factura…'}" style="width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;box-sizing:border-box;">` : '');
     listEl.innerHTML = matches.map((m, idx) => {
       const warn = m.confidence === 'amount_mismatch';
       const badge = warn
         ? `<span style="font-size:10px;font-weight:700;color:#92400E;background:#FEF3C7;border-radius:4px;padding:1px 6px;">⚠ ${en ? 'amount differs' : 'monto difiere'}</span>`
         : '';
-      return `<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;${warn ? 'background:#FFFBEB;' : ''}">
-        <input type="checkbox" class="qbRecChk" data-idx="${idx}" ${warn ? '' : 'checked'}>
+      const chk = (preCheck && !warn) ? 'checked' : '';
+      return `<label class="qbRecRow" data-search="${escapeHtml((String(m.num) + ' ' + (m.customer||'')).toLowerCase())}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;${warn ? 'background:#FFFBEB;' : ''}">
+        <input type="checkbox" class="qbRecChk" data-idx="${idx}" ${chk}>
         <div style="flex:1;min-width:0;">
           <div style="font-size:13px;font-weight:600;">#${escapeHtml(String(m.num))} · ${escapeHtml(m.customer || '')}</div>
           <div style="font-size:11px;color:var(--text-soft);">${fmtCurrency(m.appAmount)}${m.amount != null ? ` · QB: ${fmtCurrency(Math.abs(m.amount))}` : ''} ${badge}</div>
@@ -8211,6 +8314,15 @@ window.qbRecParse = function() {
   document.getElementById('qbRecStep1').style.display = 'none';
   document.getElementById('qbRecStep2').style.display = '';
   document.getElementById('qbRecBackBtn').style.display = '';
+};
+
+// Filter the review list as Nela types (large reconciliations).
+window.qbRecFilter = function() {
+  const q = (document.getElementById('qbRecSearch')?.value || '').toLowerCase().trim();
+  document.querySelectorAll('#qbRecList .qbRecRow').forEach(row => {
+    const hay = row.getAttribute('data-search') || '';
+    row.style.display = (!q || hay.indexOf(q) > -1) ? '' : 'none';
+  });
 };
 
 window.qbRecToggleAll = function(state) {
@@ -8254,6 +8366,8 @@ window.qbRecApply = async function() {
     : `✓ ${paid} factura${paid !== 1 ? 's' : ''} marcada${paid !== 1 ? 's' : ''} pagada${paid !== 1 ? 's' : ''}${alertsResolved ? ` · ${alertsResolved} alerta${alertsResolved !== 1 ? 's' : ''} de TECH-TICKETS resuelta${alertsResolved !== 1 ? 's' : ''}` : ''}`, 'success');
   try { if (typeof computeAndRender === 'function') computeAndRender(); } catch (_e) {}
   try { if (typeof updateCrossAppInboxBadge === 'function') updateCrossAppInboxBadge(); } catch (_e) {}
+  // Record that a reconcile just happened → resets the nudge timer.
+  try { setLastReconcile(paid); } catch (_e) {}
 };
 
 
