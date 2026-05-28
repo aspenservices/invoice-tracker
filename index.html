@@ -3933,6 +3933,20 @@ window.markAsPaid = async function(id) {
   const history = [...(inv.history || []), { ts: now, action: 'paid' }];
   await updateInvoiceData(id, { status: 'paid', paidAt: now, history });
   toast(t('toast.markedPaid', inv.invoiceNumber), 'success');
+  // Gap B fix: resolve any open TECH-TICKETS alerts for this invoice too.
+  const whoResolved = getInvoiceTrackerUser() || 'Invoice Tracker';
+  const paidInv = allInvoices.find(i => i.id === id) || inv;
+  setTimeout(async () => {
+    try {
+      const r = await resolveInvoiceCrossAppAlerts(paidInv, whoResolved, 'paid_in_invoice_tracker');
+      if (r && r.resolved > 0) {
+        toast(currentLang === 'en'
+          ? `✓ ${r.resolved} TECH-TICKETS alert${r.resolved !== 1 ? 's' : ''} auto-resolved`
+          : `✓ ${r.resolved} alerta${r.resolved !== 1 ? 's' : ''} de TECH-TICKETS auto-resuelta${r.resolved !== 1 ? 's' : ''}`, 'success');
+        try { if (typeof updateCrossAppInboxBadge === 'function') updateCrossAppInboxBadge(); } catch(_e){}
+      }
+    } catch(_e){ console.warn('[markAsPaid] resolve alerts failed', _e); }
+  }, 300);
 };
 
 window.openDeleteModal = function(id) {
@@ -3978,49 +3992,84 @@ window.openSettingsModal = function() {
 };
 
 window.testTicketsConnection = async function() {
-  const apiKey = document.getElementById('setTixApiKey').value.trim();
-  const projectId = document.getElementById('setTixProjectId').value.trim();
+  const apiKey = document.getElementById('setTixApiKey').value.trim() || DEFAULT_TICKETS_DB.apiKey;
+  const projectId = document.getElementById('setTixProjectId').value.trim() || DEFAULT_TICKETS_DB.projectId;
   const ticketsColl = document.getElementById('setTixTicketsColl').value.trim() || 'tickets';
-  const custColl = document.getElementById('setTixCustColl').value.trim();
   const resultEl = document.getElementById('tixTestResult');
-  
-  if (!apiKey || !projectId) {
-    resultEl.innerHTML = '<span style="color:var(--pending);">⚠ Falta API Key o Project ID</span>';
-    return;
+  const en = currentLang === 'en';
+
+  resultEl.innerHTML = `<span style="color:var(--text-soft);">${en ? 'Running full diagnostic…' : 'Diagnóstico completo…'}</span>`;
+  const lines = [];
+
+  // ── STEP 1: Anonymous auth (mint a token) — this is what 401s come from ──
+  let token = null;
+  try {
+    // Clear any stale token so we test a fresh mint
+    _ticketsAuthToken = null; _ticketsAuthTokenExp = 0;
+    token = await getTicketsAuthToken();
+    if (token) {
+      lines.push(`<div style="color:var(--sent);">✓ ${en ? 'Auth: signed in (anonymous token OK)' : 'Auth: sesión iniciada (token anónimo OK)'}</div>`);
+    } else {
+      const hint = getTicketsConnectionHint(currentLang);
+      lines.push(`<div style="color:var(--pending);">❌ ${en ? 'Auth FAILED' : 'Auth FALLÓ'} — ${escapeHtml(hint)}</div>`);
+    }
+  } catch (e) {
+    lines.push(`<div style="color:var(--pending);">❌ ${en ? 'Auth error' : 'Error de auth'}: ${escapeHtml(e.message)}</div>`);
   }
-  resultEl.innerHTML = '<span style="color:var(--text-soft);">Probando…</span>';
-  
-  // Test tickets collection
+
+  // ── STEP 2: Authenticated READ (tickets) ──
   try {
     const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${ticketsColl}?pageSize=1&key=${apiKey}`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
+    const res = await fetch(url, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} });
+    if (res.ok) {
+      lines.push(`<div style="color:var(--sent);">✓ ${en ? 'Read OK (tickets reachable)' : 'Lectura OK (tickets accesible)'}</div>`);
+    } else {
       let msg = `HTTP ${res.status}`;
-      if (res.status === 403) msg = 'Reglas Firestore bloquean lectura (necesita allow read: if true)';
-      if (res.status === 404) msg = `Proyecto o colección no existe`;
-      if (res.status === 400) msg = 'API Key inválida';
-      resultEl.innerHTML = `<span style="color:var(--pending);">❌ ${escapeHtml(msg)}</span>`;
-      return;
+      if (res.status === 401) msg = en ? '401 — token rejected (auth/network issue, see below)' : '401 — token rechazado (problema auth/red, ver abajo)';
+      if (res.status === 403) msg = en ? '403 — Firestore rules block read' : '403 — reglas Firestore bloquean lectura';
+      if (res.status === 400) msg = en ? '400 — invalid API key' : '400 — API Key inválida';
+      lines.push(`<div style="color:var(--pending);">❌ ${en ? 'Read' : 'Lectura'}: ${escapeHtml(msg)}</div>`);
     }
-    const data = await res.json();
-    let msg = `✓ Tickets OK (${data.documents?.length || 0}+ docs)`;
-    
-    // Also test customers if provided
-    if (custColl) {
-      const url2 = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${custColl}?pageSize=1&key=${apiKey}`;
-      const res2 = await fetch(url2);
-      if (res2.ok) {
-        const data2 = await res2.json();
-        msg += ` · Customers OK (${data2.documents?.length || 0}+ docs)`;
-      } else {
-        msg += ` · Customers: HTTP ${res2.status}`;
-      }
-    }
-    resultEl.innerHTML = `<span style="color:var(--sent);">${msg}</span>`;
-  } catch (err) {
-    resultEl.innerHTML = `<span style="color:var(--pending);">❌ ${escapeHtml(err.message)}</span>`;
+  } catch (e) {
+    lines.push(`<div style="color:var(--pending);">❌ ${en ? 'Read network error' : 'Error de red en lectura'}: ${escapeHtml(e.message)}</div>`);
   }
+
+  // ── STEP 3: Authenticated WRITE test (the operation that's actually failing) ──
+  // Write a tiny self-test doc to a separate collection so we don't pollute
+  // cross_app_events, then we know publish/resolve will work.
+  if (token) {
+    try {
+      const wUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/_connection_tests?key=${apiKey}`;
+      const wRes = await fetch(wUrl, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { from: { stringValue: 'invoice-tracker' }, at: { timestampValue: new Date().toISOString() } } })
+      });
+      if (wRes.ok) {
+        lines.push(`<div style="color:var(--sent);">✓ ${en ? 'Write OK — publishing alerts will work!' : 'Escritura OK — ¡publicar alertas funcionará!'}</div>`);
+      } else {
+        let msg = `HTTP ${wRes.status}`;
+        if (wRes.status === 401) msg = en ? '401 — token rejected on write' : '401 — token rechazado al escribir';
+        if (wRes.status === 403) msg = en ? '403 — rules block write (need: allow write if request.auth != null)' : '403 — reglas bloquean escritura (necesita: allow write if request.auth != null)';
+        lines.push(`<div style="color:var(--pending);">❌ ${en ? 'Write' : 'Escritura'}: ${escapeHtml(msg)}</div>`);
+      }
+    } catch (e) {
+      lines.push(`<div style="color:var(--pending);">❌ ${en ? 'Write network error' : 'Error de red en escritura'}: ${escapeHtml(e.message)}</div>`);
+    }
+  } else {
+    lines.push(`<div style="color:var(--text-soft);">⏭ ${en ? 'Write test skipped (no token)' : 'Test de escritura omitido (sin token)'}</div>`);
+  }
+
+  // ── Verdict + actionable hint ──
+  if (!token) {
+    lines.push(`<div style="margin-top:6px;padding:7px 9px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:6px;color:#991B1B;font-size:11px;line-height:1.5;">
+      <b>${en ? 'Most likely cause:' : 'Causa más probable:'}</b><br>
+      1. ${en ? 'A VPN or ad-blocker is blocking <code>securetoken.googleapis.com</code> — try disabling <b>VPN Plus</b> / blockers for this site.' : 'Un VPN o ad-blocker está bloqueando <code>securetoken.googleapis.com</code> — prueba desactivar <b>VPN Plus</b> / bloqueadores para este sitio.'}<br>
+      2. ${en ? 'Anonymous auth is OFF in Firebase — Console → Authentication → Sign-in method → Anonymous → Enable.' : 'Auth anónima está APAGADA en Firebase — Console → Authentication → Sign-in method → Anonymous → Enable.'}<br>
+      3. ${en ? 'Check your internet connection.' : 'Revisa tu conexión a internet.'}
+    </div>`);
+  }
+  resultEl.innerHTML = lines.join('');
 };
 
 window.saveSettings = function() {
@@ -5927,9 +5976,32 @@ window.searchTixForImport = function(e) {
       `).join('');
       window._tixLastResults = results;
     } catch (err) {
-      resEl.innerHTML = `<div style="font-size:11px;color:var(--pending);padding:4px;">⚠ ${escapeHtml(err.message || 'Error')}. Configura TICKETS DB en Settings.</div>`;
+      const en = currentLang === 'en';
+      const is401 = /401/.test(err.message || '');
+      // For a 401, the real cause is almost always the auth token — show the
+      // human hint (network vs anonymous-auth-disabled) instead of a raw code.
+      const hint = is401 ? getTicketsConnectionHint(currentLang) : (err.message || 'Error');
+      resEl.innerHTML = `<div style="font-size:11px;color:var(--pending);padding:6px 4px;line-height:1.5;">
+        ⚠ ${escapeHtml(hint)}
+        <button type="button" onclick="window.retryTixCustomerFetch()" style="margin-left:6px;background:none;border:1px solid var(--pending);color:var(--pending);border-radius:5px;padding:1px 8px;font-size:10px;font-weight:700;cursor:pointer;">🔄 ${en ? 'Retry' : 'Reintentar'}</button>
+      </div>`;
     }
   }, 350);
+};
+
+// Force-clear the cached (failed) auth token + customer cache and re-run the
+// last customer search. Wired to the 🔄 Retry button shown on a 401.
+window.retryTixCustomerFetch = function() {
+  _ticketsAuthToken = null;
+  _ticketsAuthTokenExp = 0;
+  _ticketsCustCache = null;
+  _ticketsCustCacheTs = 0;
+  const input = document.getElementById('cTixSearch');
+  if (input) {
+    if (typeof window.searchTixForImport === 'function') { window.searchTixForImport({ target: input }); }
+    else { input.dispatchEvent(new Event('input')); }
+  }
+  toast(currentLang === 'en' ? 'Reconnecting to TECH-TICKETS…' : 'Reconectando a TECH-TICKETS…', 'info');
 };
 
 window.applyTixImport = function(idx) {
@@ -6317,6 +6389,25 @@ window.savePaymentStatus = async function() {
   }
   toast(toastMsg, 'success');
   closeModal('paymentModal');
+
+  // ─── Gap B fix: when the invoice is now PAID, resolve any open cross-app
+  // alerts in TECH-TICKETS so the task closes there too and Nela gets the
+  // "resolved" reflection. Best-effort, runs after the modal closes. ───
+  if (willMarkPaid) {
+    const paidInv = allInvoices.find(i => i.id === psEditingId) || invForCheck;
+    const whoResolved = getInvoiceTrackerUser() || 'Invoice Tracker';
+    setTimeout(async () => {
+      try {
+        const r = await resolveInvoiceCrossAppAlerts(paidInv, whoResolved, 'paid_in_invoice_tracker');
+        if (r && r.resolved > 0) {
+          toast(currentLang === 'en'
+            ? `✓ ${r.resolved} TECH-TICKETS alert${r.resolved !== 1 ? 's' : ''} auto-resolved`
+            : `✓ ${r.resolved} alerta${r.resolved !== 1 ? 's' : ''} de TECH-TICKETS auto-resuelta${r.resolved !== 1 ? 's' : ''}`, 'success');
+          try { if (typeof updateCrossAppInboxBadge === 'function') updateCrossAppInboxBadge(); } catch(_e){}
+        }
+      } catch(_e){ console.warn('[savePaymentStatus] resolve alerts failed', _e); }
+    }, 300);
+  }
   
   // ─── If payment problem (declined/no-CC), offer to notify collections team ───
   const isProblematic = !willMarkPaid && (psSelectedReason === 'cc_declined' || psSelectedReason === 'cc_needed');
@@ -6634,9 +6725,22 @@ window.publishCrossAppAlert = async function() {
     computeAndRender();
   } catch (err) {
     console.error('[CrossAppAlert] Publish failed:', err);
-    toast(en
-      ? `Error publishing alert: ${err.message}`
-      : `Error publicando alerta: ${err.message}`, 'error');
+    const is401 = /401|unauthenticated|missing or invalid auth/i.test(err.message || '');
+    if (is401) {
+      // The token to tech-tickets-a9485 is being rejected. Show the human hint
+      // (network block vs anonymous-auth-disabled) and keep the modal OPEN so
+      // Nela can hit retry without re-typing everything.
+      const hint = getTicketsConnectionHint(currentLang);
+      toast(en
+        ? `Can't reach TECH-TICKETS (auth). ${hint}`
+        : `No se puede conectar a TECH-TICKETS (auth). ${hint}`, 'error');
+      // Force a fresh token on next attempt
+      _ticketsAuthToken = null; _ticketsAuthTokenExp = 0;
+    } else {
+      toast(en
+        ? `Error publishing alert: ${err.message}`
+        : `Error publicando alerta: ${err.message}`, 'error');
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = en ? '🔔 Publish alert' : '🔔 Publicar alerta';
@@ -7526,6 +7630,7 @@ function getTicketsDbConfig() {
 let _ticketsAuthApp = null;
 let _ticketsAuthToken = null;
 let _ticketsAuthTokenExp = 0;
+let _ticketsAuthLastError = null; // surfaced to the user for clearer diagnostics
 
 async function getTicketsAuthToken() {
   // Return cached token if still valid (refresh 5 min before expiry)
@@ -7533,29 +7638,66 @@ async function getTicketsAuthToken() {
     return _ticketsAuthToken;
   }
   const cfg = getTicketsDbConfig();
-  try {
-    if (!_ticketsAuthApp) {
-      // Initialize a SECOND Firebase app — different project, separate auth
-      _ticketsAuthApp = initializeApp({
-        apiKey: cfg.apiKey,
-        authDomain: `${cfg.projectId}.firebaseapp.com`,
-        projectId: cfg.projectId
-      }, 'tickets-auth'); // unique app name (Firebase requires it)
+  // Retry up to 3 times with backoff — transient internet drops (the
+  // ERR_NAME_NOT_RESOLVED / ERR_INTERNET_DISCONNECTED on securetoken we saw)
+  // would otherwise leave us with NO token and every Firestore call 401s.
+  const MAX_TRIES = 3;
+  for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+    try {
+      if (!_ticketsAuthApp) {
+        // Initialize a SECOND Firebase app — different project, separate auth
+        _ticketsAuthApp = initializeApp({
+          apiKey: cfg.apiKey,
+          authDomain: `${cfg.projectId}.firebaseapp.com`,
+          projectId: cfg.projectId
+        }, 'tickets-auth'); // unique app name (Firebase requires it)
+      }
+      const auth = getAuth(_ticketsAuthApp);
+      if (!auth.currentUser) {
+        await signInAnonymously(auth);
+        console.info('[TicketsAuth] Signed in anonymously to', cfg.projectId, 'UID:', auth.currentUser?.uid);
+      }
+      // force-refresh (getIdToken(true)) so we never send a stale/expired token.
+      // A stale token is the classic cause of "401 UNAUTHENTICATED" when the
+      // securetoken refresh endpoint was briefly unreachable on a prior call.
+      const token = await auth.currentUser.getIdToken(true);
+      _ticketsAuthToken = token;
+      _ticketsAuthTokenExp = Date.now() + 60 * 60 * 1000; // Firebase ID tokens last 1 hour
+      _ticketsAuthLastError = null;
+      return token;
+    } catch (err) {
+      _ticketsAuthLastError = { code: err.code, message: err.message, at: Date.now() };
+      const isNetwork = /network|disconnect|name_not_resolved|fetch|timeout/i.test((err.code || '') + (err.message || ''));
+      console.warn(`[TicketsAuth] attempt ${attempt}/${MAX_TRIES} failed:`, err.code, err.message, isNetwork ? '(network)' : '');
+      // auth/operation-not-allowed = Anonymous sign-in is DISABLED in the
+      // Firebase console — retrying won't help, bail immediately with a hint.
+      if (err.code === 'auth/operation-not-allowed') {
+        _ticketsAuthLastError.hint = 'Anonymous auth is disabled in tech-tickets-a9485. Enable it: Firebase Console → Authentication → Sign-in method → Anonymous → Enable.';
+        console.error('[TicketsAuth] ' + _ticketsAuthLastError.hint);
+        return null;
+      }
+      if (attempt < MAX_TRIES) {
+        await new Promise(r => setTimeout(r, attempt * 800)); // 0.8s, 1.6s backoff
+      }
     }
-    const auth = getAuth(_ticketsAuthApp);
-    if (!auth.currentUser) {
-      await signInAnonymously(auth);
-      console.info('[TicketsAuth] Signed in anonymously to', cfg.projectId, 'UID:', auth.currentUser?.uid);
-    }
-    const token = await auth.currentUser.getIdToken();
-    _ticketsAuthToken = token;
-    // Firebase ID tokens last 1 hour
-    _ticketsAuthTokenExp = Date.now() + 60 * 60 * 1000;
-    return token;
-  } catch (err) {
-    console.warn('[TicketsAuth] Anonymous auth failed:', err.code, err.message);
-    return null; // fall back to API-key-only mode (works only if rules allow public read)
   }
+  return null; // all retries exhausted
+}
+
+// Human-readable status of the TECH-TICKETS connection — used by the customer
+// search UI so Nela sees WHY it failed instead of a bare "401".
+function getTicketsConnectionHint(lang) {
+  const en = lang === 'en';
+  if (!_ticketsAuthLastError) return en ? 'Connected' : 'Conectado';
+  if (_ticketsAuthLastError.hint) return _ticketsAuthLastError.hint;
+  const isNetwork = /network|disconnect|name_not_resolved|fetch|timeout/i
+    .test((_ticketsAuthLastError.code || '') + (_ticketsAuthLastError.message || ''));
+  if (isNetwork) {
+    return en
+      ? 'No internet connection to reach TECH-TICKETS. Check your wifi and click 🔄 to retry.'
+      : 'Sin conexión a internet para llegar a TECH-TICKETS. Revisa tu wifi y dale 🔄 para reintentar.';
+  }
+  return (en ? 'Auth error: ' : 'Error de autenticación: ') + (_ticketsAuthLastError.code || _ticketsAuthLastError.message || 'unknown');
 }
 
 // ════════════════════════════════════════════════════════════
@@ -7668,6 +7810,93 @@ async function publishCrossAppEvent({ eventType, customerName, payload, severity
   const data = await res.json();
   console.info('[CrossAppEvent] Published', eventType, 'for', customerName, '→', data.name?.split('/').pop());
   return data;
+}
+
+// ════════════════════════════════════════════════════════════
+// RESOLVE a cross_app_event in tech-tickets-a9485 (Gap B fix).
+// When Invoice Tracker marks an invoice PAID, we PATCH the matching
+// cross_app_event(s) so TECH-TICKETS Alerts Center closes the task and
+// shows "resolved" — the same as if someone clicked Resolve over there.
+// This makes the two apps talk both ways instead of one-way.
+//   eventId:     Firestore doc ID stored on the invoice history at publish time
+//   resolvedBy:  who triggered it (the Invoice Tracker user)
+//   reason:      short machine reason, e.g. 'paid_in_invoice_tracker'
+// Returns true on success, false on failure (never throws — best-effort).
+async function resolveCrossAppEvent(eventId, resolvedBy, reason) {
+  if (!eventId) return false;
+  try {
+    const cfg = getTicketsDbConfig();
+    const token = await getTicketsAuthToken();
+    if (!token) { console.warn('[ResolveEvent] No auth token — skipping', eventId); return false; }
+    // updateMask lists EXACTLY the fields we touch so we don't clobber the rest
+    const masks = ['status', 'resolvedAt', 'resolvedBy', 'resolvedReason']
+      .map(f => 'updateMask.fieldPaths=' + encodeURIComponent(f)).join('&');
+    const url = `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents/cross_app_events/${eventId}?key=${cfg.apiKey}&${masks}`;
+    const body = {
+      fields: {
+        status: { stringValue: 'resolved' },
+        resolvedAt: { timestampValue: new Date().toISOString() },
+        resolvedBy: { stringValue: resolvedBy || 'Invoice Tracker' },
+        resolvedReason: { stringValue: reason || 'paid_in_invoice_tracker' }
+      }
+    };
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      console.warn(`[ResolveEvent] PATCH failed (HTTP ${res.status}) for ${eventId}: ${txt.slice(0, 160)}`);
+      return false;
+    }
+    console.info('[ResolveEvent] Resolved cross_app_event', eventId, 'by', resolvedBy);
+    return true;
+  } catch (err) {
+    console.warn('[ResolveEvent] Error resolving', eventId, err.message);
+    return false;
+  }
+}
+
+// Resolve ALL open cross-app alerts published for a given invoice. Reads the
+// invoice's history for 'crossapp_alert_published' entries, resolves each
+// eventId in TECH-TICKETS, and stamps a 'crossapp_alert_resolved' entry back
+// on the invoice so the local UI + inbox stay consistent. Best-effort: a
+// network hiccup never blocks the "mark paid" flow.
+async function resolveInvoiceCrossAppAlerts(inv, resolvedBy, reason) {
+  try {
+    if (!inv || !Array.isArray(inv.history)) return { attempted: 0, resolved: 0 };
+    const pubs = inv.history.filter(h => h.action === 'crossapp_alert_published' && h.eventId);
+    if (!pubs.length) return { attempted: 0, resolved: 0 };
+    // Skip ones we already recorded as resolved locally
+    const alreadyResolved = new Set(
+      inv.history.filter(h => h.action === 'crossapp_alert_resolved' && h.eventId).map(h => h.eventId)
+    );
+    const todo = pubs.filter(p => !alreadyResolved.has(p.eventId));
+    if (!todo.length) return { attempted: 0, resolved: 0 };
+    let resolved = 0;
+    const newHist = (inv.history || []).slice();
+    for (const pub of todo) {
+      const ok = await resolveCrossAppEvent(pub.eventId, resolvedBy, reason);
+      if (ok) {
+        resolved++;
+        newHist.push({
+          action: 'crossapp_alert_resolved',
+          eventId: pub.eventId,
+          by: resolvedBy || 'Invoice Tracker',
+          reason: reason || 'paid_in_invoice_tracker',
+          at: Date.now()
+        });
+      }
+    }
+    if (resolved > 0) {
+      await updateInvoiceData(inv.id, { history: newHist });
+    }
+    return { attempted: todo.length, resolved };
+  } catch (err) {
+    console.warn('[ResolveInvoiceAlerts] Error', err.message);
+    return { attempted: 0, resolved: 0 };
+  }
 }
 
 // Firestore REST value unwrapper — converts Firestore format back to plain JS
