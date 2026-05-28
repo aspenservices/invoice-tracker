@@ -1379,6 +1379,7 @@ input.field-err, textarea.field-err, select.field-err {
     </div>
     <button class="btn btn-secondary" onclick="exportCSV()" data-i18n="toolbar.exportCsv">Exportar CSV</button>
     <button class="btn btn-secondary" onclick="exportQbCsv()" data-i18n="toolbar.exportQb" data-i18n-title="toolbar.exportQb.title">📤 Exportar a QB</button>
+    <button class="btn btn-secondary" onclick="window.openQbReconcile()" id="qbReconcileBtn" title="Sube/pega tu reporte de QuickBooks para cerrar pagos en bloque" style="background:#ECFDF5;border-color:#6EE7B7;color:#047857;font-weight:700;">🔄 Reconciliar QB</button>
     <button class="btn btn-secondary" onclick="exportWeeklyReport()" data-i18n="toolbar.weeklyReport" title="Reporte para Tom y Sam — Excel con resumen, técnicos, clientes y pendientes">📑 Reporte semanal</button>
     <button class="btn btn-secondary" onclick="toggleBulkMode()" id="bulkToggleBtn" data-i18n="toolbar.bulkSend">📦 Bulk send</button>
     <button class="btn btn-secondary" onclick="window.openWarrantyStandalone()" data-i18n="warranty.openBtn" data-i18n-title="warranty.openBtn.title" title="Calculadora de garantía — checa si un servicio está dentro de la cobertura">🛡 Garantía</button>
@@ -1606,6 +1607,61 @@ input.field-err, textarea.field-err, select.field-err {
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('deleteModal')">Cancelar</button>
       <button class="btn btn-danger" onclick="confirmDelete()">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- QB RECONCILE MODAL -->
+<div class="modal-backdrop" id="qbReconcileModal">
+  <div class="modal" style="max-width:860px;">
+    <div class="modal-header">
+      <span class="modal-title">🔄 <span id="qbRecTitle">Reconciliar con QuickBooks</span></span>
+      <button class="modal-close" onclick="closeModal('qbReconcileModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <!-- STEP 1: paste / upload -->
+      <div id="qbRecStep1">
+        <div style="font-size:12px;color:var(--text-soft);line-height:1.5;margin-bottom:12px;" id="qbRecIntro">
+          Exporta de QuickBooks el reporte <b>Open Invoices</b> (Reports → Customers &amp; Receivables → Open Invoices),
+          ábrelo en Excel, copia las filas y <b>pégalas</b> abajo. O sube un archivo CSV.
+        </div>
+        <!-- Mode -->
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+          <label style="flex:1;min-width:240px;border:2px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;display:flex;gap:8px;align-items:flex-start;" id="qbRecModeOpenWrap">
+            <input type="radio" name="qbRecMode" value="open" checked style="margin-top:2px;">
+            <span><b id="qbRecModeOpenT">Open Invoices (lo que aún deben)</b><br><span style="font-size:11px;color:var(--text-soft);" id="qbRecModeOpenD">Lo que NO esté en la lista = ya se pagó</span></span>
+          </label>
+          <label style="flex:1;min-width:240px;border:2px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;display:flex;gap:8px;align-items:flex-start;" id="qbRecModePaidWrap">
+            <input type="radio" name="qbRecMode" value="paid" style="margin-top:2px;">
+            <span><b id="qbRecModePaidT">Pagos recibidos</b><br><span style="font-size:11px;color:var(--text-soft);" id="qbRecModePaidD">Lo que SÍ esté en la lista = se pagó</span></span>
+          </label>
+        </div>
+        <textarea id="qbRecPaste" rows="9" placeholder="Pega aquí las filas copiadas de Excel/QB…  (Type	Num	Date	Name	Amount …)" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:8px;font-size:12px;font-family:'JetBrains Mono',monospace;resize:vertical;box-sizing:border-box;line-height:1.5;"></textarea>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">
+          <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;">
+            📁 <span id="qbRecUploadLbl">Subir CSV</span>
+            <input type="file" id="qbRecFile" accept=".csv,.txt,.tsv" style="display:none;" onchange="window.qbRecLoadFile(event)">
+          </label>
+          <span style="flex:1;"></span>
+          <button class="btn btn-primary" onclick="window.qbRecParse()" id="qbRecParseBtn">⚡ <span id="qbRecParseLbl">Analizar</span></button>
+        </div>
+        <div id="qbRecParseMsg" style="font-size:12px;margin-top:10px;"></div>
+      </div>
+
+      <!-- STEP 2: review matches -->
+      <div id="qbRecStep2" style="display:none;">
+        <div id="qbRecSummary" style="font-size:13px;font-weight:600;margin-bottom:10px;"></div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <button class="btn btn-ghost btn-sm" onclick="window.qbRecToggleAll(true)" id="qbRecSelAll">✓ Marcar todas</button>
+          <button class="btn btn-ghost btn-sm" onclick="window.qbRecToggleAll(false)" id="qbRecSelNone">✕ Ninguna</button>
+        </div>
+        <div id="qbRecList" style="max-height:42vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('qbReconcileModal')" id="qbRecCancelBtn">Cancelar</button>
+      <button class="btn btn-ghost" onclick="window.qbRecBack()" id="qbRecBackBtn" style="display:none;">← Atrás</button>
+      <button class="btn btn-primary" onclick="window.qbRecApply()" id="qbRecApplyBtn" style="display:none;">✓ <span id="qbRecApplyLbl">Aplicar (marcar pagadas)</span></button>
     </div>
   </div>
 </div>
@@ -7898,6 +7954,266 @@ async function resolveInvoiceCrossAppAlerts(inv, resolvedBy, reason) {
     return { attempted: 0, resolved: 0 };
   }
 }
+
+// ════════════════════════════════════════════════════════════
+// QB RECONCILIATION IMPORTER (#1 + #3)
+// Nela exports a report from QuickBooks Desktop (Open Invoices or Payments),
+// pastes the rows (or uploads a CSV), and we bulk-detect which invoices got
+// paid — then mark them paid + auto-resolve their TECH-TICKETS alerts. Kills
+// the "check 40 invoices one by one" problem. No external library: we parse
+// CSV/TSV ourselves so a blocked CDN never breaks it.
+// ════════════════════════════════════════════════════════════
+let _qbRecMatches = []; // [{invId, num, customer, amount, appAmount, confidence}]
+
+// Normalize an invoice number for matching: digits only, no leading zeros.
+function _qbNormNum(s) {
+  return String(s == null ? '' : s).replace(/[^0-9]/g, '').replace(/^0+/, '');
+}
+// Parse a money-ish string ("$1,234.50", "1.234,50", "(123.00)") to a number.
+function _qbParseAmount(s) {
+  if (s == null) return NaN;
+  let t = String(s).trim();
+  const neg = /^\(.*\)$/.test(t); // accounting negatives
+  t = t.replace(/[()$\s]/g, '');
+  // If both , and . present, assume , is thousands sep
+  if (t.indexOf(',') > -1 && t.indexOf('.') > -1) t = t.replace(/,/g, '');
+  else if (t.indexOf(',') > -1 && t.indexOf('.') === -1) t = t.replace(/,/g, ''); // 1,234 -> 1234
+  const n = parseFloat(t);
+  return isNaN(n) ? NaN : (neg ? -n : n);
+}
+// Split one CSV/TSV line into cells, honoring "quoted, fields".
+function _qbSplitLine(line, delim) {
+  const out = []; let cur = ''; let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQ) {
+      if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else cur += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === delim) { out.push(cur); cur = ''; }
+      else cur += c;
+    }
+  }
+  out.push(cur);
+  return out.map(s => s.trim());
+}
+
+// Parse pasted text → array of {num, amount, name}. Auto-detects delimiter,
+// header row, and which columns hold the number / amount / customer.
+function _qbParseReport(text) {
+  const rawLines = text.split(/\r?\n/).map(l => l.trimEnd()).filter(l => l.trim().length);
+  if (!rawLines.length) return { rows: [], error: 'empty' };
+  // Delimiter: tab if any line has one (Excel paste), else comma
+  const delim = rawLines.some(l => l.indexOf('\t') > -1) ? '\t' : ',';
+  const grid = rawLines.map(l => _qbSplitLine(l, delim));
+  // Find a header row: the row containing a recognizable "number" header
+  const numHdr = /^(num|number|no\.?|invoice\s*#?|invoice\s*number|doc\s*num|trans\s*#?|#)$/i;
+  const amtHdr = /^(amount|open\s*balance|balance|total|amt|orig\.?\s*amount)$/i;
+  const nameHdr = /^(name|customer|customer:job|client|bill\s*to)$/i;
+  const typeHdr = /^(type|transaction\s*type)$/i;
+  let headerIdx = -1, colNum = -1, colAmt = -1, colName = -1, colType = -1;
+  for (let r = 0; r < Math.min(grid.length, 15); r++) {
+    const row = grid[r];
+    let n = -1, a = -1, nm = -1, ty = -1;
+    row.forEach((cell, ci) => {
+      const c = cell.trim();
+      if (n < 0 && numHdr.test(c)) n = ci;
+      if (a < 0 && amtHdr.test(c)) a = ci;
+      if (nm < 0 && nameHdr.test(c)) nm = ci;
+      if (ty < 0 && typeHdr.test(c)) ty = ci;
+    });
+    if (n >= 0 || a >= 0) { headerIdx = r; colNum = n; colAmt = a; colName = nm; colType = ty; break; }
+  }
+  // Build a quick lookup of app invoice numbers for content-based fallback
+  const appNums = new Set((allInvoices || []).map(i => _qbNormNum(i.invoiceNumber)));
+  // Fallback column detection by content if no header found
+  if (headerIdx < 0) {
+    const sample = grid.slice(0, Math.min(grid.length, 40));
+    const score = (ci, fn) => sample.reduce((s, row) => s + (fn(row[ci]) ? 1 : 0), 0);
+    let bestNum = -1, bestNumScore = 0, bestAmt = -1, bestAmtScore = 0;
+    const width = Math.max(...grid.map(r => r.length));
+    for (let ci = 0; ci < width; ci++) {
+      const ns = score(ci, v => v && appNums.has(_qbNormNum(v)));
+      if (ns > bestNumScore) { bestNumScore = ns; bestNum = ci; }
+      const as = score(ci, v => v && !isNaN(_qbParseAmount(v)) && /\d/.test(v) && /[.,]/.test(v));
+      if (as > bestAmtScore) { bestAmtScore = as; bestAmt = ci; }
+    }
+    colNum = bestNum; colAmt = bestAmt; headerIdx = -1;
+  }
+  if (colNum < 0 && colAmt < 0) return { rows: [], error: 'no_columns' };
+  // Extract data rows (skip header)
+  const rows = [];
+  for (let r = (headerIdx >= 0 ? headerIdx + 1 : 0); r < grid.length; r++) {
+    const row = grid[r];
+    // If a Type column exists, keep only Invoice / Payment rows (skip Total etc.)
+    if (colType >= 0) {
+      const ty = (row[colType] || '').toLowerCase();
+      if (ty && !/invoice|payment|receipt|credit/.test(ty)) continue;
+    }
+    const numRaw = colNum >= 0 ? row[colNum] : '';
+    const num = _qbNormNum(numRaw);
+    if (!num) continue; // a usable row needs an invoice number
+    const amount = colAmt >= 0 ? _qbParseAmount(row[colAmt]) : NaN;
+    const name = colName >= 0 ? (row[colName] || '') : '';
+    rows.push({ num, amount: isNaN(amount) ? null : amount, name });
+  }
+  return { rows, delim, headerIdx, colNum, colAmt, colName };
+}
+
+window.openQbReconcile = function() {
+  const en = currentLang === 'en';
+  // i18n labels
+  const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  set('qbRecTitle', en ? 'Reconcile with QuickBooks' : 'Reconciliar con QuickBooks');
+  set('qbRecModeOpenT', en ? 'Open Invoices (what they still owe)' : 'Open Invoices (lo que aún deben)');
+  set('qbRecModeOpenD', en ? "What's NOT in the list = already paid" : 'Lo que NO esté en la lista = ya se pagó');
+  set('qbRecModePaidT', en ? 'Payments received' : 'Pagos recibidos');
+  set('qbRecModePaidD', en ? "What IS in the list = paid" : 'Lo que SÍ esté en la lista = se pagó');
+  set('qbRecUploadLbl', en ? 'Upload CSV' : 'Subir CSV');
+  set('qbRecParseLbl', en ? 'Analyze' : 'Analizar');
+  set('qbRecApplyLbl', en ? 'Apply (mark paid)' : 'Aplicar (marcar pagadas)');
+  set('qbRecCancelBtn', en ? 'Cancel' : 'Cancelar');
+  set('qbRecBackBtn', en ? '← Back' : '← Atrás');
+  set('qbRecSelAll', en ? '✓ Select all' : '✓ Marcar todas');
+  set('qbRecSelNone', en ? '✕ None' : '✕ Ninguna');
+  const intro = document.getElementById('qbRecIntro');
+  if (intro) intro.innerHTML = en
+    ? 'Export the <b>Open Invoices</b> report from QuickBooks (Reports → Customers &amp; Receivables → Open Invoices), open it in Excel, copy the rows and <b>paste</b> them below. Or upload a CSV.'
+    : 'Exporta de QuickBooks el reporte <b>Open Invoices</b> (Reports → Customers &amp; Receivables → Open Invoices), ábrelo en Excel, copia las filas y <b>pégalas</b> abajo. O sube un archivo CSV.';
+  // reset state
+  document.getElementById('qbRecPaste').value = '';
+  document.getElementById('qbRecParseMsg').innerHTML = '';
+  document.getElementById('qbRecStep1').style.display = '';
+  document.getElementById('qbRecStep2').style.display = 'none';
+  document.getElementById('qbRecApplyBtn').style.display = 'none';
+  document.getElementById('qbRecBackBtn').style.display = 'none';
+  _qbRecMatches = [];
+  document.getElementById('qbReconcileModal').classList.add('open');
+};
+
+window.qbRecLoadFile = function(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { document.getElementById('qbRecPaste').value = e.target.result || ''; };
+  reader.onerror = () => toast(currentLang === 'en' ? 'Could not read file' : 'No se pudo leer el archivo', 'error');
+  reader.readAsText(file);
+};
+
+window.qbRecParse = function() {
+  const en = currentLang === 'en';
+  const text = document.getElementById('qbRecPaste').value || '';
+  const msgEl = document.getElementById('qbRecParseMsg');
+  if (!text.trim()) { msgEl.innerHTML = `<span style="color:var(--pending);">⚠ ${en ? 'Paste or upload your QB report first' : 'Pega o sube tu reporte de QB primero'}</span>`; return; }
+  const mode = (document.querySelector('input[name="qbRecMode"]:checked') || {}).value || 'open';
+  const parsed = _qbParseReport(text);
+  if (parsed.error || !parsed.rows.length) {
+    msgEl.innerHTML = `<span style="color:var(--pending);">⚠ ${en ? "Couldn't find invoice numbers in that data. Make sure the report includes a Num/Invoice # column." : 'No encontré números de factura. Asegúrate que el reporte tenga una columna Num/Invoice #.'}</span>`;
+    return;
+  }
+  // Set of invoice numbers present in the QB report
+  const reportNums = new Set(parsed.rows.map(r => r.num));
+  const reportByNum = {}; parsed.rows.forEach(r => { reportByNum[r.num] = r; });
+  // Open invoices in the app (anything not already paid)
+  const openInvoices = (allInvoices || []).filter(i => i.status !== 'paid');
+  const matches = [];
+  if (mode === 'open') {
+    // Open Invoices report = still owed. App-open invoice NOT in report → paid.
+    openInvoices.forEach(inv => {
+      const n = _qbNormNum(inv.invoiceNumber);
+      if (n && !reportNums.has(n)) {
+        matches.push({ invId: inv.id, num: inv.invoiceNumber, customer: inv.customerName, appAmount: Number(inv.amount) || 0, amount: null, confidence: 'paid_gone' });
+      }
+    });
+  } else {
+    // Payments report = these got paid. App-open invoice IN report → paid.
+    openInvoices.forEach(inv => {
+      const n = _qbNormNum(inv.invoiceNumber);
+      if (n && reportNums.has(n)) {
+        const rep = reportByNum[n];
+        const amtMatch = rep.amount == null ? null : Math.abs((Number(inv.amount) || 0) - Math.abs(rep.amount)) < 0.02;
+        matches.push({ invId: inv.id, num: inv.invoiceNumber, customer: inv.customerName, appAmount: Number(inv.amount) || 0, amount: rep.amount, confidence: amtMatch === false ? 'amount_mismatch' : 'matched' });
+      }
+    });
+  }
+  _qbRecMatches = matches;
+  // Render review step
+  const listEl = document.getElementById('qbRecList');
+  const sumEl = document.getElementById('qbRecSummary');
+  if (!matches.length) {
+    sumEl.innerHTML = `<span style="color:var(--sent);">✓ ${en ? 'Nothing to reconcile — your app already matches QB. 🎉' : 'Nada que reconciliar — tu app ya coincide con QB. 🎉'}</span>`;
+    listEl.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-soft);font-size:13px;">${en ? 'All ' + openInvoices.length + ' open invoices accounted for.' : 'Las ' + openInvoices.length + ' facturas abiertas están al día.'}</div>`;
+    document.getElementById('qbRecApplyBtn').style.display = 'none';
+  } else {
+    const totalAmt = matches.reduce((s, m) => s + (m.appAmount || 0), 0);
+    sumEl.innerHTML = en
+      ? `Found <b>${matches.length}</b> invoice${matches.length !== 1 ? 's' : ''} that appear <b>PAID</b> in QB but still open here — total <b>${fmtCurrency(totalAmt)}</b>. Review and apply:`
+      : `Encontré <b>${matches.length}</b> factura${matches.length !== 1 ? 's' : ''} que aparecen <b>PAGADAS</b> en QB pero abiertas aquí — total <b>${fmtCurrency(totalAmt)}</b>. Revisa y aplica:`;
+    listEl.innerHTML = matches.map((m, idx) => {
+      const warn = m.confidence === 'amount_mismatch';
+      const badge = warn
+        ? `<span style="font-size:10px;font-weight:700;color:#92400E;background:#FEF3C7;border-radius:4px;padding:1px 6px;">⚠ ${en ? 'amount differs' : 'monto difiere'}</span>`
+        : '';
+      return `<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;${warn ? 'background:#FFFBEB;' : ''}">
+        <input type="checkbox" class="qbRecChk" data-idx="${idx}" ${warn ? '' : 'checked'}>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;">#${escapeHtml(String(m.num))} · ${escapeHtml(m.customer || '')}</div>
+          <div style="font-size:11px;color:var(--text-soft);">${fmtCurrency(m.appAmount)}${m.amount != null ? ` · QB: ${fmtCurrency(Math.abs(m.amount))}` : ''} ${badge}</div>
+        </div>
+      </label>`;
+    }).join('');
+    document.getElementById('qbRecApplyBtn').style.display = '';
+  }
+  document.getElementById('qbRecStep1').style.display = 'none';
+  document.getElementById('qbRecStep2').style.display = '';
+  document.getElementById('qbRecBackBtn').style.display = '';
+};
+
+window.qbRecToggleAll = function(state) {
+  document.querySelectorAll('.qbRecChk').forEach(c => { c.checked = state; });
+};
+window.qbRecBack = function() {
+  document.getElementById('qbRecStep1').style.display = '';
+  document.getElementById('qbRecStep2').style.display = 'none';
+  document.getElementById('qbRecApplyBtn').style.display = 'none';
+  document.getElementById('qbRecBackBtn').style.display = 'none';
+};
+
+window.qbRecApply = async function() {
+  const en = currentLang === 'en';
+  const checked = [...document.querySelectorAll('.qbRecChk')].filter(c => c.checked).map(c => parseInt(c.dataset.idx, 10));
+  if (!checked.length) { toast(en ? 'Select at least one' : 'Selecciona al menos una', 'error'); return; }
+  const applyBtn = document.getElementById('qbRecApplyBtn');
+  applyBtn.disabled = true;
+  const whoResolved = getInvoiceTrackerUser() || 'Invoice Tracker';
+  let paid = 0, alertsResolved = 0;
+  for (const idx of checked) {
+    const m = _qbRecMatches[idx];
+    if (!m) continue;
+    const inv = allInvoices.find(i => i.id === m.invId);
+    if (!inv || inv.status === 'paid') continue;
+    const now = Date.now();
+    const history = [...(inv.history || []), { ts: now, action: 'paid', via: 'qb_reconcile', by: whoResolved }];
+    await updateInvoiceData(inv.id, { status: 'paid', paidAt: now, history });
+    paid++;
+    // Reuse the #2 sync: resolve any open TECH-TICKETS alerts for this invoice
+    try {
+      const freshInv = allInvoices.find(i => i.id === m.invId) || inv;
+      const r = await resolveInvoiceCrossAppAlerts(freshInv, whoResolved, 'paid_via_qb_reconcile');
+      if (r && r.resolved) alertsResolved += r.resolved;
+    } catch (_e) {}
+  }
+  applyBtn.disabled = false;
+  closeModal('qbReconcileModal');
+  toast(en
+    ? `✓ ${paid} invoice${paid !== 1 ? 's' : ''} marked paid${alertsResolved ? ` · ${alertsResolved} TECH-TICKETS alert${alertsResolved !== 1 ? 's' : ''} resolved` : ''}`
+    : `✓ ${paid} factura${paid !== 1 ? 's' : ''} marcada${paid !== 1 ? 's' : ''} pagada${paid !== 1 ? 's' : ''}${alertsResolved ? ` · ${alertsResolved} alerta${alertsResolved !== 1 ? 's' : ''} de TECH-TICKETS resuelta${alertsResolved !== 1 ? 's' : ''}` : ''}`, 'success');
+  try { if (typeof computeAndRender === 'function') computeAndRender(); } catch (_e) {}
+  try { if (typeof updateCrossAppInboxBadge === 'function') updateCrossAppInboxBadge(); } catch (_e) {}
+};
+
 
 // Firestore REST value unwrapper — converts Firestore format back to plain JS
 function _firestoreUnwrap(fields) {
