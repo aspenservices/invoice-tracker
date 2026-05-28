@@ -1292,6 +1292,7 @@ input.field-err, textarea.field-err, select.field-err {
       <button class="icon-btn" id="crossAppInboxBtn" onclick="window.openCrossAppInbox()" title="Tech responses & resolutions" style="position:relative;width:auto;padding:0 10px;font-size:14px;">📬<span id="crossAppInboxBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:#dc2626;color:white;font-size:9px;font-weight:700;border-radius:999px;padding:1px 5px;min-width:16px;height:14px;line-height:12px;text-align:center;box-shadow:0 1px 3px rgba(220,38,38,0.4);"></span></button>
       <button class="icon-btn" id="langBtn" onclick="toggleLang()" data-i18n="header.lang" data-i18n-title="header.lang.title" style="font-weight:700;font-size:11px;letter-spacing:0.05em;width:auto;padding:0 10px;">EN</button>
       <button class="icon-btn" id="notifBtn" onclick="window.openNotifPanel()" data-i18n-title="header.notif.title">🔕</button>
+      <button class="icon-btn" id="forceUpdateBtn" onclick="window.forceAppUpdate()" title="Forzar actualización — limpia caché y recarga la última versión / Force update — clear cache and reload latest" style="width:auto;padding:0 10px;font-size:14px;">🔄</button>
       <button class="icon-btn" onclick="openSettingsModal()" data-i18n-title="header.settings">⚙</button>
     </div>
   </header>
@@ -1639,8 +1640,8 @@ input.field-err, textarea.field-err, select.field-err {
         <textarea id="qbRecPaste" rows="9" placeholder="Pega aquí las filas copiadas de Excel/QB…  (Type	Num	Date	Name	Amount …)" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:8px;font-size:12px;font-family:'JetBrains Mono',monospace;resize:vertical;box-sizing:border-box;line-height:1.5;"></textarea>
         <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">
           <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;">
-            📁 <span id="qbRecUploadLbl">Subir CSV</span>
-            <input type="file" id="qbRecFile" accept=".csv,.txt,.tsv" style="display:none;" onchange="window.qbRecLoadFile(event)">
+            📁 <span id="qbRecUploadLbl">Subir Excel/CSV</span>
+            <input type="file" id="qbRecFile" accept=".csv,.txt,.tsv,.xlsx,.xls" style="display:none;" onchange="window.qbRecLoadFile(event)">
           </label>
           <span style="flex:1;"></span>
           <button class="btn btn-primary" onclick="window.qbRecParse()" id="qbRecParseBtn">⚡ <span id="qbRecParseLbl">Analizar</span></button>
@@ -8071,7 +8072,7 @@ window.openQbReconcile = function() {
   set('qbRecModeOpenD', en ? "What's NOT in the list = already paid" : 'Lo que NO esté en la lista = ya se pagó');
   set('qbRecModePaidT', en ? 'Payments received' : 'Pagos recibidos');
   set('qbRecModePaidD', en ? "What IS in the list = paid" : 'Lo que SÍ esté en la lista = se pagó');
-  set('qbRecUploadLbl', en ? 'Upload CSV' : 'Subir CSV');
+  set('qbRecUploadLbl', en ? 'Upload Excel/CSV' : 'Subir Excel/CSV');
   set('qbRecParseLbl', en ? 'Analyze' : 'Analizar');
   set('qbRecApplyLbl', en ? 'Apply (mark paid)' : 'Aplicar (marcar pagadas)');
   set('qbRecCancelBtn', en ? 'Cancel' : 'Cancelar');
@@ -8093,14 +8094,55 @@ window.openQbReconcile = function() {
   document.getElementById('qbReconcileModal').classList.add('open');
 };
 
-window.qbRecLoadFile = function(event) {
+window.qbRecLoadFile = async function(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
+  const en = currentLang === 'en';
+  const name = (file.name || '').toLowerCase();
+  const isExcel = /\.xlsx?$/.test(name);
+  const msgEl = document.getElementById('qbRecParseMsg');
+  if (isExcel) {
+    // Excel (.xlsx/.xls) needs a parser — lazy-load SheetJS only when needed.
+    msgEl.innerHTML = `<span style="color:var(--text-soft);">${en ? 'Reading Excel…' : 'Leyendo Excel…'}</span>`;
+    try {
+      const XLSX = await _loadSheetJS();
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const tsv = XLSX.utils.sheet_to_csv(ws, { FS: '\t' });
+      document.getElementById('qbRecPaste').value = tsv;
+      msgEl.innerHTML = `<span style="color:var(--sent);">${en ? '✓ Excel loaded — click Analyze' : '✓ Excel cargado — click Analizar'}</span>`;
+    } catch (e) {
+      console.warn('[QBRec] Excel read failed:', e);
+      msgEl.innerHTML = `<span style="color:var(--pending);line-height:1.5;display:block;">⚠ ${en
+        ? "Couldn't read Excel (your VPN/blocker may be blocking the reader). <b>Easiest fix:</b> open the file in Excel, select the rows, Copy, and <b>PASTE</b> them in the box above. Or in Excel: File → Save As → CSV, then upload the .csv."
+        : "No pude leer el Excel (tu VPN/bloqueador puede estar bloqueando el lector). <b>Más fácil:</b> abre el archivo en Excel, selecciona las filas, Copia y <b>PÉGALAS</b> en el cuadro de arriba. O en Excel: Archivo → Guardar como → CSV, y sube el .csv."}</span>`;
+    }
+    return;
+  }
+  // CSV / TSV / plain text — read directly, no library needed
   const reader = new FileReader();
   reader.onload = e => { document.getElementById('qbRecPaste').value = e.target.result || ''; };
-  reader.onerror = () => toast(currentLang === 'en' ? 'Could not read file' : 'No se pudo leer el archivo', 'error');
+  reader.onerror = () => toast(en ? 'Could not read file' : 'No se pudo leer el archivo', 'error');
   reader.readAsText(file);
 };
+
+// Lazy-load SheetJS from CDN, only the first time an Excel file is uploaded.
+// Kept out of the main bundle so a blocked CDN never breaks the rest of the app.
+let _sheetJSPromise = null;
+function _loadSheetJS() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (_sheetJSPromise) return _sheetJSPromise;
+  _sheetJSPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => window.XLSX ? resolve(window.XLSX) : reject(new Error('XLSX not available'));
+    s.onerror = () => reject(new Error('Failed to load SheetJS (blocked?)'));
+    document.head.appendChild(s);
+    setTimeout(() => { if (!window.XLSX) reject(new Error('SheetJS load timeout')); }, 8000);
+  });
+  return _sheetJSPromise;
+}
 
 window.qbRecParse = function() {
   const en = currentLang === 'en';
@@ -8454,12 +8496,42 @@ function renderCrossAppInbox() {
               : `<div style="font-size:12px;color:#9ca3af;font-style:italic;">${en ? 'No additional note — quick action only' : 'Sin nota adicional — solo acción rápida'}</div>`}
           </div>
           ${r.publishedBy ? `<div style="font-size:10px;color:#6b7280;margin-top:6px;text-align:right;">${en ? 'You published this as' : 'Vos publicaste esta como'} <b>${escapeHtml(r.publishedBy)}</b></div>` : ''}
+          ${(() => {
+            // Manual fallback: if this resolution means PAID and the matched
+            // invoice isn't paid yet, offer a one-click "Mark paid" button.
+            if (!r.matchedInvoiceId) return '';
+            const _mInv = (allInvoices || []).find(i => i.id === r.matchedInvoiceId);
+            if (!_mInv || _mInv.status === 'paid') return '';
+            const _isPaidMethod = ['customer_paid', 'paid-in-app'].includes(r.resolutionMethod);
+            if (!_isPaidMethod) return '';
+            return `<div style="margin-top:10px;text-align:right;">
+              <button onclick="event.stopPropagation();window.markInvoicePaidFromInbox('${r.matchedInvoiceId}')" style="background:#047857;color:white;border:none;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">💵 ${en ? 'Mark invoice PAID here' : 'Marcar factura PAGADA aquí'}</button>
+            </div>`;
+          })()}
         </div>
       </div>`;
   }
   html += '</div>';
   listEl.innerHTML = html;
 }
+
+// Manual "Mark paid" from the inbox card — guaranteed fallback when the
+// auto mark-paid didn't fire (e.g. stale resolution). Marks the invoice paid
+// in Invoice Tracker; the cross_app_event is already resolved in TECH-TICKETS.
+window.markInvoicePaidFromInbox = async function(invoiceId) {
+  const en = currentLang === 'en';
+  const inv = (allInvoices || []).find(i => i.id === invoiceId);
+  if (!inv) { toast(en ? 'Invoice not found' : 'Factura no encontrada', 'error'); return; }
+  if (inv.status === 'paid') { toast(en ? 'Already paid' : 'Ya está pagada', 'info'); return; }
+  const now = Date.now();
+  const who = getInvoiceTrackerUser() || 'Invoice Tracker';
+  const history = [...(inv.history || []), { ts: now, action: 'paid', via: 'inbox_confirm', by: who, note: 'Confirmed paid from Tech Responses inbox' }];
+  await updateInvoiceData(invoiceId, { status: 'paid', paidAt: now, history });
+  toast(en ? `💵 Invoice #${inv.invoiceNumber} marked PAID` : `💵 Factura #${inv.invoiceNumber} marcada PAGADA`, 'success');
+  try { if (typeof renderCrossAppInbox === 'function') renderCrossAppInbox(); } catch(_e){}
+  try { if (typeof computeAndRender === 'function') computeAndRender(); } catch(_e){}
+  try { if (typeof updateCrossAppInboxBadge === 'function') updateCrossAppInboxBadge(); } catch(_e){}
+};
 
 // Click a resolution row → close modal, scroll to invoice, briefly highlight it.
 window.goToInvoiceFromInbox = function(invoiceId) {
@@ -9050,6 +9122,7 @@ async function pollCrossAppResolves() {
     const previouslyKnownIds = new Set(_allResolvedEvents.map(e => e.eventId));
     const nextEvents = [];
     const newlyStamped = [];
+    let markedPaidThisPoll = false; // force a re-render even for already-known events
     const en = currentLang === 'en';
 
     for (const item of docs) {
@@ -9123,20 +9196,27 @@ async function pollCrossAppResolves() {
           }
         }
 
-        // ── Mark the invoice PAID when TECH-TICKETS closed it as "paid-in-app" ──
-        // (Alberto/Celia collected the payment in the field app → reflect it here.)
-        if (flds.resolutionMethod === 'paid-in-app' && matchedInv.status !== 'paid') {
+        // ── Mark the invoice PAID when TECH-TICKETS closed it as paid ──
+        // TECH-TICKETS sends one of two "paid" resolution methods:
+        //   • 'paid-in-app'   → the quick "💵 Mark paid" button
+        //   • 'customer_paid' → the resolve modal "💵 Customer paid" option
+        // Both mean the money was collected → reflect it here as PAID.
+        // (Note: 'card_collected' is NOT paid — that's just new CC info on file.)
+        const _paidMethods = ['paid-in-app', 'customer_paid'];
+        if (_paidMethods.includes(flds.resolutionMethod) && matchedInv.status !== 'paid') {
           try {
             const now = Date.now();
             const paidHist = [...(matchedInv.history || []), {
               ts: now, action: 'paid', via: 'tech-tickets',
               resolvedBy: flds.resolvedBy || null,
-              note: 'Marked paid from TECH-TICKETS'
+              resolutionMethod: flds.resolutionMethod || null,
+              note: 'Marked paid from TECH-TICKETS (' + (flds.resolutionMethod || '') + ')'
             }];
             matchedInv.status = 'paid';
             matchedInv.paidAt = now;
             matchedInv.history = paidHist;
             await updateInvoiceData(matchedInv.id, { status: 'paid', paidAt: now, history: paidHist });
+            markedPaidThisPoll = true;
             const _enPaid = currentLang === 'en';
             toast(_enPaid
               ? `💵 Invoice #${matchedInv.invoiceNumber} marked PAID (by ${flds.resolvedBy || 'Tech team'})`
@@ -9177,6 +9257,13 @@ async function pollCrossAppResolves() {
       } else {
         toast((en ? `✓ ${newlyStamped.length} tech alert(s) resolved — see 📬 inbox` : `✓ ${newlyStamped.length} alertas resueltas — ver 📬 inbox`), 'success');
       }
+      updateCrossAppInboxBadge();
+      computeAndRender();
+    }
+    // Even if no NEW resolutions arrived, if we auto-marked an invoice PAID
+    // (e.g. a previously-seen resolution that hadn't been applied yet), the
+    // list still needs to refresh so the card flips to PAID immediately.
+    if (markedPaidThisPoll && newlyStamped.length === 0) {
       updateCrossAppInboxBadge();
       computeAndRender();
     }
@@ -9437,6 +9524,61 @@ const NOTIF_KEY = 'aspenInvoiceTracker_lastNotifCheck';
 let _notifInterval = null;
 
 // Register a real Service Worker file for background notifications
+// ════════════════════════════════════════════════════════════
+// FORCE APP UPDATE — nukes the service worker + all caches, then
+// hard-reloads. This is the bulletproof fix for "I deployed but the
+// site shows the old version" (the SW was serving a cached HTML).
+// Exposed as a button in Settings + the notification panel.
+// ════════════════════════════════════════════════════════════
+window.forceAppUpdate = async function() {
+  const en = currentLang === 'en';
+  try {
+    toast(en ? 'Clearing cache…' : 'Limpiando caché…', 'info');
+    // 1. Unregister every service worker for this origin/scope
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) { try { await r.unregister(); } catch (_e) {} }
+    }
+    // 2. Delete all Cache Storage entries (the app shell the SW stored)
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      for (const k of keys) { try { await caches.delete(k); } catch (_e) {} }
+    }
+  } catch (e) {
+    console.warn('[ForceUpdate]', e);
+  } finally {
+    // 3. Hard reload bypassing HTTP cache (cache-bust query forces a fresh GET)
+    const u = new URL(location.href);
+    u.searchParams.set('_v', Date.now().toString());
+    location.replace(u.toString());
+  }
+};
+
+// Auto-check for a newer service worker on every load. If one installs while
+// the page is open, show a non-intrusive "new version" reload prompt so Nela
+// doesn't have to manually clear cache after a deploy.
+async function _checkForAppUpdate(reg) {
+  if (!reg) return;
+  try {
+    reg.update();
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener('statechange', () => {
+        // A new worker is installed AND an old one was controlling → update ready
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+          const en = currentLang === 'en';
+          if (confirm(en
+            ? 'A new version of the app is available. Reload now to update?'
+            : 'Hay una nueva versión de la app. ¿Recargar ahora para actualizar?')) {
+            window.forceAppUpdate();
+          }
+        }
+      });
+    });
+  } catch (_e) { /* best-effort */ }
+}
+
 // (GitHub Pages blocks blob: URL service workers, so we need a real file)
 let _swRegistration = null;
 async function registerNotifSW() {
@@ -9450,6 +9592,7 @@ async function registerNotifSW() {
     console.info('[SW] Registered successfully:', _swRegistration.scope);
     // Ensure the worker is active before we try to use it
     await navigator.serviceWorker.ready;
+    _checkForAppUpdate(_swRegistration); // auto-detect new deploys
     return _swRegistration;
   } catch (e) {
     console.error('[SW] Register failed:', e);
