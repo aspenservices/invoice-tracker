@@ -1559,6 +1559,7 @@ input.field-err, textarea.field-err, select.field-err {
     <button class="tab tab-followup" data-filter="followup"><span data-i18n="tab.followup">Por cobrar</span> <span class="tab-count" id="cntFollowupTab">0</span></button>
     <button class="tab" data-filter="sent"><span data-i18n="tab.sent">Enviadas</span> <span class="tab-count" id="cntSentTab">0</span></button>
     <button class="tab" data-filter="paid"><span data-i18n="tab.paid">Pagadas</span> <span class="tab-count" id="cntPaidTab">0</span></button>
+    <button class="tab" data-filter="qb_pending"><span data-i18n="tab.qbPending">💳 Paid · QB Pending</span> <span class="tab-count" id="cntQbPendingTab" style="background:#2563EB;color:white;">0</span></button>
     <button class="tab" data-filter="snoozed"><span data-i18n="tab.snoozed">💤 Snoozeadas</span> <span class="tab-count" id="cntSnoozedTab" style="background:#7c3aed;color:white;">0</span></button>
     <button class="tab" data-filter="problems"><span data-i18n="tab.problems">🚨 Problemas</span> <span class="tab-count" id="cntProblemsTab" style="background:#9F1239;color:white;">0</span></button>
     <button class="tab" data-filter="customers"><span data-i18n="tab.customers">👥 Clientes</span> <span class="tab-count" id="cntCustomersTab">0</span></button>
@@ -1590,8 +1591,8 @@ input.field-err, textarea.field-err, select.field-err {
       <!-- PDF UPLOAD ZONE -->
       <div class="pdf-upload-zone" id="pdfDropZone" onclick="document.getElementById('pdfFileInput').click()">
         <div class="pdf-upload-icon">📄</div>
-        <div class="pdf-upload-title">Subir PDF de la factura de QuickBooks</div>
-        <div class="pdf-upload-sub">Auto-extrae número, cliente, monto, fecha · Click o arrastra el PDF aquí</div>
+        <div class="pdf-upload-title">Subir PDF · QuickBooks o Authorize.net</div>
+        <div class="pdf-upload-sub">Auto-detecta el formato y extrae los campos · Auth.net Paid → auto-marca pagada + QB Pending</div>
         <input type="file" id="pdfFileInput" class="pdf-upload-input" accept="application/pdf" onchange="handlePdfUpload(event)">
       </div>
       
@@ -2334,11 +2335,24 @@ input.field-err, textarea.field-err, select.field-err {
             <div class="ps-radio" data-method="cash" data-i18n="payment.method.cash">💵 Efectivo</div>
             <div class="ps-radio" data-method="ipospays" data-i18n="payment.method.ipospays">🟢 ipospays</div>
             <div class="ps-radio" data-method="credit_card" data-i18n="payment.method.cc">💳 Tarjeta</div>
+            <div class="ps-radio" data-method="auth_net" data-i18n="payment.method.authnet">🔵 Authorize.net</div>
             <div class="ps-radio" data-method="ach" data-i18n="payment.method.ach">🏦 ACH</div>
             <div class="ps-radio" data-method="other" data-i18n="payment.method.other">❓ Otro</div>
           </div>
           <input type="text" id="psMethodRef" data-i18n-ph="payment.method.ref.ph" placeholder="# de cheque / últimos 4 de CC / referencia (opcional)" style="width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px;">
-          
+
+          <!-- ─── QB SYNC TRACKING — appears only when a payment method is selected ─── -->
+          <!-- Closes the loop between Auth.net/external collections and QuickBooks Desktop entry. -->
+          <div id="psQbSyncBlock" style="display:none;margin-top:12px;padding:12px;background:#EFF6FF;border:1px solid #93C5FD;border-radius:var(--r-md);">
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="psQbSynced" style="margin-top:2px;width:16px;height:16px;cursor:pointer;accent-color:#2563EB;">
+              <span style="flex:1;">
+                <span style="font-size:12px;font-weight:700;color:#1E40AF;display:block;" data-i18n="payment.qbSync.label">📒 Already entered in QuickBooks</span>
+                <span style="font-size:11px;color:#1E40AF;opacity:0.85;line-height:1.45;display:block;margin-top:3px;" data-i18n="payment.qbSync.hint">Leave unchecked if you still need to record this payment in QB Desktop. Unsynced payments appear in the "💳 Paid · QB Pending" tab.</span>
+              </span>
+            </label>
+          </div>
+
           <!-- ─── CHECK TRACKING (only shown when method = check) ─── -->
           <div id="psCheckTracking" style="display:none;margin-top:12px;padding:12px;background:#FEF9C3;border:1px solid #FDE047;border-radius:var(--r-md);">
             <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#854D0E;display:block;margin-bottom:6px;">📍 <span data-i18n="payment.check.location.title">Ubicación del cheque</span></label>
@@ -3071,6 +3085,12 @@ let useLocalStorage = false;
 const LS_KEY_C = 'aspenInvoiceTracker_customers_v1';
 let currentPdfBase64 = null;  // PDF subido en el form actual (base64)
 let currentPdfFilename = null;
+// ─── Fields auto-extracted from Authorize.net PDFs (overlaid on saveInvoice) ───
+// Stash here because they don't have a visible form field — applied at save time.
+let currentExtractedStatus = null;        // 'paid' if Auth.net PDF status=Paid
+let currentExtractedPaymentMethod = null; // 'auth_net' when Auth.net PDF detected
+let currentExtractedQbSynced = null;      // false when extracted from Auth.net (= needs QB entry)
+let currentExtractedPaidAt = null;        // timestamp from Auth.net invoice date when status=Paid
 let currentPdfSize = 0;
 
 const isConfigSet = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith('REEMPLAZAR');
@@ -3208,13 +3228,17 @@ function saveToLocalStorage() {
 // ════════════════════════════════════════════════════════════
 async function createInvoice(data) {
   const now = Date.now();
+  // Honor explicit status='paid' from data (e.g. Auth.net PDF auto-fill).
+  // Default is 'pending' but data spread comes AFTER so it can override.
+  const isPreSetPaid = data.status === 'paid';
   const invoice = {
-    ...data,
     status: 'pending',
+    ...data,
     createdAt: now,
-    sentAt: null,
-    paidAt: null,
-    history: [{ ts: now, action: 'created' }]
+    sentAt: data.sentAt || null,
+    paidAt: isPreSetPaid ? (data.paidAt || now) : null,
+    history: [{ ts: now, action: isPreSetPaid ? 'created_paid' : 'created',
+                ...(isPreSetPaid && data.paymentMethod ? { via: data.paymentMethod } : {}) }]
   };
   if (useLocalStorage) {
     invoice.id = 'local_' + now;
@@ -3738,6 +3762,10 @@ function computeAndRender() {
   document.getElementById('cntSentTodayTab').textContent = sentTodayCount;
   document.getElementById('cntProblemsTab').textContent = getProblemCustomers().length;
   document.getElementById('cntSnoozedTab').textContent = countSnoozed();
+  // QB Pending count — paid invoices still awaiting QuickBooks Desktop entry
+  const qbPendingCount = allInvoices.filter(i => deriveStatus(i) === 'paid' && !i.qbSynced).length;
+  const cntQbEl = document.getElementById('cntQbPendingTab');
+  if (cntQbEl) cntQbEl.textContent = qbPendingCount;
   
   // Update unconfirmed alerts banner
   updateUnconfirmedBanner();
@@ -3885,6 +3913,9 @@ function computeAndRender() {
     filtered = filtered.filter(i => ids.has(i.id));
   } else if (currentFilter === 'cc_pending') {
     filtered = filtered.filter(i => deriveStatus(i) !== 'paid' && !!i.paymentReason && !isSnoozed(i));
+  } else if (currentFilter === 'qb_pending') {
+    // Paid invoices that haven't been recorded in QuickBooks Desktop yet
+    filtered = filtered.filter(i => deriveStatus(i) === 'paid' && !i.qbSynced && !isSnoozed(i));
   } else if (currentFilter !== 'all') {
     filtered = filtered.filter(i => deriveStatus(i) === currentFilter && !isSnoozed(i));
   } else {
@@ -4073,7 +4104,17 @@ window.saveInvoice = async function() {
   
   // Clear any previous error banner
   document.getElementById('formErrorMsg').style.display = 'none';
-  
+
+  // ─── MERGE FLAGS EXTRACTED FROM AUTH.NET PDF (if any) ───
+  // These don't have visible form fields — they were stashed by applyExtractedFields.
+  // Apply only when creating a NEW invoice; editing preserves whatever the user has set.
+  if (!editingId) {
+    if (currentExtractedStatus) data.status = currentExtractedStatus;
+    if (currentExtractedPaymentMethod) data.paymentMethod = currentExtractedPaymentMethod;
+    if (currentExtractedQbSynced !== null) data.qbSynced = currentExtractedQbSynced;
+    if (currentExtractedPaidAt) data.paidAt = currentExtractedPaidAt;
+  }
+
   // Duplicate detection — when creating NEW (not editing), warn if invoice # already exists
   // Prevents Alberto from accidentally creating duplicate invoices with the same number
   if (!editingId && data.invoiceNumber) {
@@ -4476,11 +4517,16 @@ window.handlePdfUpload = async function(event) {
     
     // Intentar extraer texto y campos
     const extracted = await extractPdfFields(arrayBuffer);
-    // Filtrar campos especiales (_error)
+    // Filtrar campos especiales (_error, _set*, _authBanner)
     const realFields = Object.keys(extracted).filter(k => !k.startsWith('_'));
     if (realFields.length > 0) {
       applyExtractedFields(extracted);
-      showExtractedBanner(realFields.length, null);
+      // Auth.net PDFs surface a richer banner explaining what will happen on save
+      if (extracted._authBanner) {
+        showAuthNetBanner(extracted._authBanner, realFields.length);
+      } else {
+        showExtractedBanner(realFields.length, null);
+      }
       // Safety net: also fire the token-based customer lookup (catches cases where the customer
       // is in TICKETS DB but not local, OR the PDF customer name format differs from the local DB)
       try { await window.tryAutoFillCustomerFromName(); } catch(_e){ console.warn('[PDF→AutoFill]', _e); }
@@ -4492,7 +4538,7 @@ window.handlePdfUpload = async function(event) {
     console.error('Error PDF:', e);
     toast('Error procesando PDF: ' + e.message, 'error');
     dropZone.classList.remove('processing');
-    dropZone.querySelector('.pdf-upload-title').textContent = 'Subir PDF de la factura de QuickBooks';
+    dropZone.querySelector('.pdf-upload-title').textContent = 'Subir PDF · QuickBooks o Authorize.net';
   }
 };
 
@@ -4526,17 +4572,50 @@ function showExtractedBanner(count, errorMsg) {
   }
 }
 
+// Banner specific to Authorize.net PDFs — explains exactly what flags will be applied at save.
+// Without this, the auto-paid + auto-QB-pending behavior would be a surprise.
+function showAuthNetBanner(authStatus, count) {
+  const banner = document.getElementById('extractedBanner');
+  const en = currentLang === 'en';
+  if (authStatus === 'paid') {
+    banner.className = 'pdf-extracted-banner';
+    banner.style.background = '#EFF6FF';
+    banner.style.border = '1px solid #93C5FD';
+    banner.style.color = '#1E40AF';
+    banner.innerHTML = en
+      ? `🔵 <b>Authorize.net invoice detected — Status: PAID.</b> Auto-filled ${count} fields. On save, this will be marked <b>Paid via Authorize.net</b> and added to the <b>"💳 Paid · QB Pending"</b> tab as a reminder to enter it in QuickBooks Desktop.`
+      : `🔵 <b>Factura de Authorize.net — Status: PAGADA.</b> Auto-completé ${count} campos. Al guardar quedará marcada <b>Pagada vía Authorize.net</b> y aparecerá en la pestaña <b>"💳 Paid · QB Pending"</b> como recordatorio para registrarla en QuickBooks Desktop.`;
+  } else if (authStatus === 'overdue') {
+    banner.className = 'alert-row red';
+    banner.style.marginBottom = '14px';
+    banner.innerHTML = en
+      ? `🔵 <b>Authorize.net invoice — Status: OVERDUE.</b> Auto-filled ${count} fields. Will be saved as <b>unpaid</b> — collection reminder is on you.`
+      : `🔵 <b>Factura de Authorize.net — Status: VENCIDA.</b> Auto-completé ${count} campos. Se guardará como <b>impaga</b> — el recordatorio de cobro queda en tus manos.`;
+  } else {
+    banner.className = 'pdf-extracted-banner';
+    banner.innerHTML = en
+      ? `🔵 <b>Authorize.net invoice — Status: UNPAID.</b> Auto-filled ${count} fields. Saved as pending.`
+      : `🔵 <b>Factura de Authorize.net — Status: NO PAGADA.</b> Auto-completé ${count} campos. Se guardará como pendiente.`;
+  }
+  banner.style.display = 'flex';
+}
+
 window.removePdf = function() {
   currentPdfBase64 = null;
   currentPdfFilename = null;
   currentPdfSize = 0;
+  // Clear any Auth.net flags stashed from a previous PDF
+  currentExtractedStatus = null;
+  currentExtractedPaymentMethod = null;
+  currentExtractedQbSynced = null;
+  currentExtractedPaidAt = null;
   document.getElementById('pdfFileInput').value = '';
   document.getElementById('pdfFileInfo').style.display = 'none';
   document.getElementById('extractedBanner').style.display = 'none';
   const dropZone = document.getElementById('pdfDropZone');
   dropZone.style.display = 'block';
   dropZone.classList.remove('processing', 'has-file');
-  dropZone.querySelector('.pdf-upload-title').textContent = 'Subir PDF de la factura de QuickBooks';
+  dropZone.querySelector('.pdf-upload-title').textContent = 'Subir PDF · QuickBooks o Authorize.net';
 };
 
 async function arrayBufferToBase64(buffer) {
@@ -4630,8 +4709,96 @@ function buildLinesFromPositioned(items) {
 }
 
 function parseInvoiceFromLines(lines, allItems) {
-  const result = {};
   const joined = lines.map(l => l.text).join(' ');
+  // ─── DETECT FORMAT: Authorize.net vs QuickBooks Desktop ───
+  // Auth.net PDFs have distinctive markers ("Partial Payment Allowed", "Status: Paid/Unpaid/Overdue",
+  // colon-delimited "Invoice Number:"). QB Desktop uses "Invoice No." + "Bill To:" block.
+  if (_isAuthNetPdf(joined)) {
+    console.log('[PDF Parser] Detected Authorize.net format');
+    return _parseAuthNetInvoice(lines, joined);
+  }
+  console.log('[PDF Parser] Detected QuickBooks Desktop format');
+  return _parseQbInvoice(lines, allItems, joined);
+}
+
+function _isAuthNetPdf(joined) {
+  // High-confidence markers — any one of these strongly indicates Auth.net
+  if (/Partial\s+Payment\s+Allowed/i.test(joined)) return true;
+  if (/Authorize\.?\s*net/i.test(joined)) return true;
+  // Fallback combo — colon-delimited Invoice Number + Status field is the Auth.net signature
+  // (QB uses "Invoice No." with period, not "Invoice Number:" with colon)
+  if (/Invoice\s+Number\s*:/i.test(joined) &&
+      /Status\s*:\s*(Paid|Unpaid|Overdue)\b/i.test(joined)) return true;
+  return false;
+}
+
+// Parse "May 28, 2026" → "2026-05-28" (Auth.net uses long-form English dates)
+function _parseTextDate(s) {
+  const months = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+  const m = s.match(/([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
+  if (!m) return '';
+  const mo = months[m[1].toLowerCase().slice(0, 3)];
+  if (!mo) return '';
+  return `${m[3]}-${String(mo).padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+}
+
+function _parseAuthNetInvoice(lines, joined) {
+  const result = {};
+
+  // ───────── INVOICE NUMBER ─────────
+  const invM = joined.match(/Invoice\s+Number\s*:\s*(\d{1,10})/i);
+  if (invM) result.invoiceNumber = invM[1];
+
+  // ───────── STATUS (Paid / Unpaid / Overdue) ─────────
+  // Drives the auto-paid + QB-pending flagging downstream
+  const statusM = joined.match(/Status\s*:\s*(Paid|Unpaid|Overdue)\b/i);
+  const authStatus = statusM ? statusM[1].toLowerCase() : null;
+
+  // ───────── INVOICE DATE ─────────
+  // Used as paidAt when status=Paid (Auth.net doesn't expose payment timestamp in PDF)
+  const dateM = joined.match(/Invoice\s+Date\s*:\s*([A-Z][a-z]+\s+\d{1,2},?\s+\d{4})/i);
+  if (dateM) result.serviceDate = _parseTextDate(dateM[1]);
+
+  // ───────── CUSTOMER NAME (Bill To: <name> on same line) ─────────
+  // Format: "Bill To: Heather Costello" — capture until newline or "Email" / "Phone" boundary
+  // PDFs concatenate lines with spaces when extracted, so we also stop at known section headers
+  const billM = joined.match(/Bill\s+To\s*:\s*([^\n]+?)(?=\s+(?:Email|Phone|Address|Details|Item|Total|$))/i);
+  if (billM) result.customerName = billM[1].trim().replace(/\s+/g, ' ');
+
+  // ───────── EMAIL ─────────
+  const emailM = joined.match(/Email\s*:\s*([\w._+\-]+@[\w.\-]+\.\w{2,})/i);
+  if (emailM) result.customerEmail = emailM[1];
+
+  // ───────── TOTAL AMOUNT ─────────
+  // Auth.net format: "Total: $492.33 USD" — explicit USD suffix
+  let totalM = joined.match(/Total\s*:\s*\$?\s*([\d,]+\.\d{2})\s*USD/i);
+  if (!totalM) totalM = joined.match(/Total\s*:\s*\$?\s*([\d,]+\.\d{2})/i);
+  if (totalM) result.amount = parseFloat(totalM[1].replace(/,/g, ''));
+
+  // ───────── FLAGS for downstream auto-fill ─────────
+  // Only auto-mark paid when Auth.net explicitly says so. Unpaid/Overdue stay pending.
+  if (authStatus === 'paid') {
+    result._setStatus = 'paid';
+    result._setPaymentMethod = 'auth_net';
+    result._setQbSynced = false;  // ← the whole point: needs to be entered in QB Desktop
+    if (result.serviceDate) {
+      result._setPaidAt = new Date(result.serviceDate + 'T12:00:00').getTime();
+    } else {
+      result._setPaidAt = Date.now();
+    }
+    result._authBanner = 'paid';
+  } else if (authStatus === 'overdue') {
+    result._authBanner = 'overdue';
+  } else if (authStatus === 'unpaid') {
+    result._authBanner = 'unpaid';
+  }
+
+  return result;
+}
+
+function _parseQbInvoice(lines, allItems, joinedIn) {
+  const result = {};
+  const joined = joinedIn || lines.map(l => l.text).join(' ');
   const lineTexts = lines.map(l => l.text);
   
   // ───────── INVOICE NUMBER ─────────
@@ -4862,12 +5029,22 @@ function applyExtractedFields(extracted) {
       if (existing.serialNumber && !document.getElementById('fSerial').value) document.getElementById('fSerial').value = existing.serialNumber;
     }
   }
+  // Auth.net PDFs include the customer email directly — apply it if the form is empty
+  if (extracted.customerEmail && !document.getElementById('fCustomerEmail').value) {
+    document.getElementById('fCustomerEmail').value = extracted.customerEmail;
+  }
   if (extracted.serviceDate && !document.getElementById('fServiceDate').value) {
     document.getElementById('fServiceDate').value = extracted.serviceDate;
   }
   if (extracted.serviceDescription && !document.getElementById('fServiceDesc').value) {
     document.getElementById('fServiceDesc').value = extracted.serviceDescription;
   }
+  // ─── AUTH.NET FLAGS — stash for saveInvoice to merge into the new record ───
+  // These don't have visible form fields; they apply at save time.
+  if (extracted._setStatus) currentExtractedStatus = extracted._setStatus;
+  if (extracted._setPaymentMethod) currentExtractedPaymentMethod = extracted._setPaymentMethod;
+  if (extracted._setQbSynced !== undefined) currentExtractedQbSynced = extracted._setQbSynced;
+  if (extracted._setPaidAt) currentExtractedPaidAt = extracted._setPaidAt;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -6560,6 +6737,11 @@ window.openPaymentModal = function(id) {
   document.getElementById('psNote').value = inv.paymentNote || '';
   document.getElementById('psMethodRef').value = inv.paymentRef || '';
   document.getElementById('psCheckLocation').value = inv.checkLocation || '';
+  // QB sync state — show block only when a method is selected OR invoice is already paid
+  const qbSyncCheckbox = document.getElementById('psQbSynced');
+  const qbSyncBlock = document.getElementById('psQbSyncBlock');
+  if (qbSyncCheckbox) qbSyncCheckbox.checked = !!inv.qbSynced;
+  if (qbSyncBlock) qbSyncBlock.style.display = (psSelectedMethod || inv.status === 'paid') ? 'block' : 'none';
   // Show/hide check tracking section based on selected method
   const checkBlock = document.getElementById('psCheckTracking');
   checkBlock.style.display = (psSelectedMethod === 'check') ? 'block' : 'none';
@@ -6658,7 +6840,10 @@ window.savePaymentStatus = async function() {
     ccRequested: ccChecked,
     ccRequestedAt: ccChecked ? Date.now() : null,
     nextFollowUp: document.getElementById('psNextFollowup').value || null,
-    paymentNote: document.getElementById('psNote').value.trim() || null
+    paymentNote: document.getElementById('psNote').value.trim() || null,
+    // QB sync flag — true when the payment has been recorded in QuickBooks Desktop.
+    // When false on a paid invoice, it shows up in the "💳 Paid · QB Pending" backlog tab.
+    qbSynced: !!document.getElementById('psQbSynced').checked
   };
   
   // ─── AUTO-SNOOZE for CC requested: if newly checked, set follow-up +2 days ───
@@ -7655,6 +7840,9 @@ function wirePaymentReasonRadios() {
       // Show/hide check tracking block based on selection
       const checkBlock = document.getElementById('psCheckTracking');
       if (checkBlock) checkBlock.style.display = (psSelectedMethod === 'check') ? 'block' : 'none';
+      // Show/hide QB sync block — relevant whenever a payment method is selected
+      const qbBlock = document.getElementById('psQbSyncBlock');
+      if (qbBlock) qbBlock.style.display = psSelectedMethod ? 'block' : 'none';
     });
   });
 }
@@ -7677,6 +7865,7 @@ function paymentMethodLabel(m) {
     cash: '💵 Efectivo',
     ipospays: '🟢 ipospays',
     credit_card: '💳 Tarjeta',
+    auth_net: '🔵 Authorize.net',
     ach: '🏦 ACH',
     zelle: '📱 Zelle',
     venmo: '📱 Venmo',
@@ -10500,6 +10689,9 @@ function renderInvoiceCardHtml(inv) {
   const daysLabel = days !== null && days !== undefined ? (s === 'pending' ? t('card.daysSinceCreated', days) : t('card.daysSinceSent', days)) : '';
   const payPill = inv.paymentReason && s !== 'paid' ? `<span class="payment-pill ${inv.paymentReason}">${paymentReasonLabel(inv.paymentReason)}</span>` : '';
   const methodPill = inv.paymentMethod && s === 'paid' ? `<span class="payment-pill" style="background:var(--paid-bg);color:var(--paid);">${paymentMethodLabel(inv.paymentMethod)}${inv.paymentRef ? ' · ' + escapeHtml(inv.paymentRef) : ''}</span>` : '';
+  // QB Pending badge — flags paid invoices that haven't been entered in QuickBooks Desktop yet.
+  // Shows next to the method pill so it's obvious which payments still need accounting follow-up.
+  const qbPendingPill = (s === 'paid' && !inv.qbSynced) ? `<span class="payment-pill" style="background:#EFF6FF;color:#1E40AF;border:1px solid #93C5FD;font-weight:700;" title="${escapeHtml(currentLang === 'en' ? 'Paid but not yet recorded in QuickBooks Desktop' : 'Pagada pero aún no registrada en QuickBooks Desktop')}">📒 ${currentLang === 'en' ? 'QB PENDING' : 'QB PENDIENTE'}</span>` : '';
   // Special pill: check collected but not yet deposited (still pending)
   const checkPendingPill = (inv.paymentMethod === 'check' && inv.checkLocation && inv.checkLocation !== 'deposited' && s !== 'paid') 
     ? `<span class="payment-pill" style="background:#FEF9C3;color:#854D0E;border:1px solid #FDE047;">📝 ${currentLang === 'en' ? 'CHECK PENDING DEPOSIT' : 'CHEQUE SIN DEPOSITAR'}${inv.checkLocation === 'with_tech' && inv.technician ? ' · ' + escapeHtml(inv.technician) : ''}${inv.checkLocation === 'office' ? ' · ' + (currentLang === 'en' ? 'In office' : 'En oficina') : ''}</span>`
@@ -10589,6 +10781,7 @@ function renderInvoiceCardHtml(inv) {
           <span class="status-badge ${s}">${statusLabel(s)}</span>
           ${payPill}
           ${methodPill}
+          ${qbPendingPill}
           ${checkPendingPill}
           ${stageBadge}
         </div>
@@ -10959,12 +11152,18 @@ function _dashComputeKPIs() {
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
 
+  // BONUS KPI — Paid but not yet entered in QB Desktop (backlog she should clear)
+  const qbPendingInvs = invs.filter(i => deriveStatus(i) === 'paid' && !i.qbSynced);
+  const qbPendingCount = qbPendingInvs.length;
+  const qbPendingTotal = qbPendingInvs.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+
   return {
     collectionRate, createdCount: createdThisMonth.length, paidCount: paidThisMonth.length,
     avgDays, paidRecentCount: paidRecent.length,
     totalPending, pendingCount: pendingInvs.length,
     collectedThisWeek, collectedLastWeek, weekDeltaPct, weekDirection,
-    topCustomers
+    topCustomers,
+    qbPendingCount, qbPendingTotal
   };
 }
 
@@ -11059,6 +11258,13 @@ function renderDashboardView() {
         <div class="dash-label"><span>${en ? 'Collected this week' : 'Cobrado esta semana'}</span>${deltaPill}</div>
         <div class="dash-value">${fmtCurrency(k.collectedThisWeek)}</div>
         <div class="dash-meta">${weekMeta}</div>
+      </div>
+      <div class="dash-card ${k.qbPendingCount > 0 ? 'amber' : 'green'}" onclick="window.jumpToFilter('qb_pending')" style="cursor:pointer;" title="${en ? 'Click to see the QB Pending tab' : 'Click para ver la pestaña QB Pending'}">
+        <div class="dash-label"><span>${en ? 'QB Pending (paid · not in QB yet)' : 'QB Pendiente (pagadas · falta entrar en QB)'}</span></div>
+        <div class="dash-value">${k.qbPendingCount}</div>
+        <div class="dash-meta">${k.qbPendingCount > 0
+          ? (en ? `${fmtCurrency(k.qbPendingTotal)} · enter in QuickBooks Desktop` : `${fmtCurrency(k.qbPendingTotal)} · entrar en QuickBooks Desktop`)
+          : (en ? '✓ All paid invoices recorded in QB' : '✓ Todas las pagadas registradas en QB')}</div>
       </div>
     </div>
     <div class="dash-section-title">🏆 ${en ? 'Top 5 customers · most outstanding' : 'Top 5 clientes · más pendiente'}</div>
