@@ -2975,6 +2975,8 @@ async function initFirebase() {
       allCustomers = Object.entries(data).map(([id, v]) => ({ id, ...v }));
       computeAndRender();
     });
+    // Shared reconcile reminder state (synced across all devices/users)
+    _subscribeSharedReconcile();
   } catch (e) {
     console.error('Init error:', e);
     setConnectionStatus('error', 'Error al inicializar');
@@ -3395,19 +3397,43 @@ function getStageCopyPlain(stage) {
 // regularly, stale-open invoices pile up.
 // ════════════════════════════════════════════════════════════
 const RECONCILE_KEY = 'aspenLastReconcile';
+let _sharedReconcile = null; // last-reconcile state synced from Firebase (shared across devices/users)
 function getLastReconcile() {
+  // Prefer the shared Firebase value; fall back to this device's local cache.
+  if (_sharedReconcile && _sharedReconcile.at) return _sharedReconcile;
   try { return JSON.parse(localStorage.getItem(RECONCILE_KEY) || 'null'); }
   catch (_e) { return null; }
 }
 function setLastReconcile(count) {
+  const rec = {
+    at: Date.now(),
+    by: (typeof getInvoiceTrackerUser === 'function' ? getInvoiceTrackerUser() : '') || '',
+    count: count || 0
+  };
+  // Local cache first (instant, works offline)
+  try { localStorage.setItem(RECONCILE_KEY, JSON.stringify(rec)); } catch (_e) {}
+  _sharedReconcile = rec;
+  // Then push to Firebase so every device/user sees the same "last reconciled".
   try {
-    localStorage.setItem(RECONCILE_KEY, JSON.stringify({
-      at: Date.now(),
-      by: (typeof getInvoiceTrackerUser === 'function' ? getInvoiceTrackerUser() : '') || '',
-      count: count || 0
-    }));
+    if (db && !useLocalStorage && typeof set === 'function') {
+      set(ref(db, 'invoiceTracker/meta/lastReconcile'), rec).catch(e => console.warn('[Reconcile] sync failed:', e));
+    }
   } catch (_e) {}
   renderReconcileNudge();
+}
+// Subscribe to the shared reconcile state — called once Firebase is connected.
+function _subscribeSharedReconcile() {
+  try {
+    if (!db || typeof onValue !== 'function') return;
+    onValue(ref(db, 'invoiceTracker/meta/lastReconcile'), (snap) => {
+      const v = snap.val();
+      if (v && v.at) {
+        _sharedReconcile = v;
+        try { localStorage.setItem(RECONCILE_KEY, JSON.stringify(v)); } catch (_e) {}
+      }
+      renderReconcileNudge();
+    });
+  } catch (e) { console.warn('[Reconcile] subscribe failed:', e); }
 }
 // How many open invoices are "stale" — open and older than N days, so likely
 // already paid in QB but never reconciled here.
