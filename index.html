@@ -2404,6 +2404,10 @@ input.field-err, textarea.field-err, select.field-err {
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('paymentModal')" data-i18n="form.cancel">Cancelar</button>
+      <!-- Mark as Unpaid — only visible when the invoice is currently paid. Lets her reverse a
+           wrong "marked paid" (e.g. she set the Auth.net method by mistake on an unpaid invoice).
+           Visibility toggled by openPaymentModal. -->
+      <button id="psUnpaidBtn" class="btn" onclick="window.markPaymentAsUnpaid()" style="display:none;background:#FEF3C7;color:#92400E;border:1.5px solid #FBBF24;font-weight:700;" title="Revert this invoice back to pending — clears paid date but keeps payment method/notes for reference">⏪ <span data-i18n="form.markUnpaid">Mark as Unpaid</span></button>
       <button class="btn btn-primary" onclick="window.savePaymentStatus()" data-i18n="form.save">Guardar</button>
     </div>
   </div>
@@ -3157,6 +3161,8 @@ async function initFirebase() {
     });
     // Shared reconcile reminder state (synced across all devices/users)
     _subscribeSharedReconcile();
+    // QB Backlog 5pm browser notification — checks every minute when enabled
+    _startQbBacklogNotificationTimer();
   } catch (e) {
     console.error('Init error:', e);
     setConnectionStatus('error', 'Error al inicializar');
@@ -3676,6 +3682,166 @@ function renderReconcileNudge() {
 // ════════════════════════════════════════════════════════════
 // RENDERING
 // ════════════════════════════════════════════════════════════
+// QB BACKLOG — 5PM DAILY BROWSER NOTIFICATION
+// Nela works in TECH-TICKETS most of the day. At 5pm she should get a desktop
+// nudge if there are paid invoices not yet entered in QuickBooks Desktop.
+// Limitations: browser notifications only fire when the tab is open. If she
+// closes the tab before 5pm, no nudge. The weekly summary email is the backup.
+// ════════════════════════════════════════════════════════════
+const QB_NOTIF_LAST_KEY = 'aspenQbBacklogNotifLast';     // YYYY-MM-DD of last fire
+const QB_NOTIF_ENABLED_KEY = 'aspenQbBacklogNotifEnabled'; // '1' = enabled
+const QB_NOTIF_HOUR = 17; // 5pm local time
+
+function _qbNotifEnabled() {
+  try { return localStorage.getItem(QB_NOTIF_ENABLED_KEY) === '1'; } catch { return false; }
+}
+
+window.enableQbBacklogNotifications = async function() {
+  const en = currentLang === 'en';
+  if (!('Notification' in window)) {
+    toast(en ? "Your browser doesn't support notifications" : 'Tu navegador no soporta notificaciones', 'error');
+    return;
+  }
+  let perm = Notification.permission;
+  if (perm === 'default') {
+    try { perm = await Notification.requestPermission(); } catch { perm = 'denied'; }
+  }
+  if (perm === 'granted') {
+    try { localStorage.setItem(QB_NOTIF_ENABLED_KEY, '1'); } catch (_e) {}
+    toast(en ? '✓ 5pm QB Backlog reminders enabled' : '✓ Recordatorios 5pm QB Backlog activados', 'success');
+    _startQbBacklogNotificationTimer();
+    computeAndRender(); // re-render banner so the enable button disappears
+  } else if (perm === 'denied') {
+    toast(en
+      ? 'Notifications blocked. Enable them in browser settings (lock icon in address bar)'
+      : 'Notificaciones bloqueadas. Actívalas en config del navegador (candado en la barra)', 'warn');
+  }
+};
+
+window.disableQbBacklogNotifications = function() {
+  try { localStorage.removeItem(QB_NOTIF_ENABLED_KEY); } catch (_e) {}
+  if (_qbNotifTimer) { clearInterval(_qbNotifTimer); _qbNotifTimer = null; }
+  toast(currentLang === 'en' ? 'QB Backlog reminders off' : 'Recordatorios QB Backlog desactivados', 'info');
+  computeAndRender();
+};
+
+let _qbNotifTimer = null;
+function _startQbBacklogNotificationTimer() {
+  if (_qbNotifTimer) clearInterval(_qbNotifTimer);
+  if (!_qbNotifEnabled()) return;
+  // Check every minute. Cheap; only fires the notification window 17:00-17:30 once per day.
+  _qbNotifTimer = setInterval(_checkQbBacklogNotification, 60 * 1000);
+  // Also run once immediately in case the user opened the app inside the window
+  _checkQbBacklogNotification();
+}
+
+function _checkQbBacklogNotification() {
+  if (!_qbNotifEnabled()) return;
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const now = new Date();
+  // Trigger window: 17:00–17:30 local time
+  if (now.getHours() !== QB_NOTIF_HOUR) return;
+  if (now.getMinutes() >= 30) return;
+  // Once per day max
+  const todayKey = now.toISOString().slice(0, 10);
+  try { if (localStorage.getItem(QB_NOTIF_LAST_KEY) === todayKey) return; } catch (_e) {}
+  // Snapshot the backlog right now
+  const qbArr = (allInvoices || []).filter(i => deriveStatus(i) === 'paid' && !i.qbSynced);
+  if (qbArr.length === 0) return; // nothing to nag about
+  const total = qbArr.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const threeDaysAgo = Date.now() - 3 * 86400000;
+  const staleCount = qbArr.filter(i => (i.paidAt || 0) > 0 && i.paidAt < threeDaysAgo).length;
+  try {
+    const en = currentLang === 'en';
+    const title = en ? '📒 QB Backlog reminder' : '📒 Recordatorio QB Backlog';
+    const body = en
+      ? `${qbArr.length} paid invoice${qbArr.length !== 1 ? 's' : ''} ($${total.toFixed(2)}) still need${qbArr.length === 1 ? 's' : ''} to be entered in QuickBooks Desktop${staleCount > 0 ? ` — ${staleCount} over 3 days old.` : '.'}`
+      : `${qbArr.length} factura${qbArr.length !== 1 ? 's' : ''} pagada${qbArr.length !== 1 ? 's' : ''} ($${total.toFixed(2)}) sin entrar en QuickBooks Desktop${staleCount > 0 ? ` — ${staleCount} con +3 días.` : '.'}`;
+    const notif = new Notification(title, {
+      body, tag: 'qb-backlog-' + todayKey, requireInteraction: staleCount > 0
+    });
+    notif.onclick = () => {
+      try { window.focus(); } catch (_e) {}
+      try { window.jumpToFilter('qb_pending'); } catch (_e) {}
+      notif.close();
+    };
+    try { localStorage.setItem(QB_NOTIF_LAST_KEY, todayKey); } catch (_e) {}
+  } catch (e) {
+    console.warn('[QBNotif] Failed to show notification:', e);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// QB BACKLOG SNAPSHOT — publish to cross_app_events for TECH-TICKETS to read
+// Lets the TECH-TICKETS weekly summary email include the current QB backlog.
+// Debounced + skip-if-unchanged to avoid Firestore write spam.
+// ════════════════════════════════════════════════════════════
+const QB_SNAPSHOT_EVENT_ID_KEY = 'aspenQbSnapshotEventId';
+const QB_SNAPSHOT_LAST_COUNT_KEY = 'aspenQbSnapshotLastCount';
+let _qbSnapshotPublishTimer = null;
+
+function _scheduleQbBacklogSnapshotPublish() {
+  // Debounce so a burst of updates collapses into one Firestore write
+  clearTimeout(_qbSnapshotPublishTimer);
+  _qbSnapshotPublishTimer = setTimeout(_publishQbBacklogSnapshotIfChanged, 2500);
+}
+
+async function _publishQbBacklogSnapshotIfChanged() {
+  try {
+    if (useLocalStorage) return; // offline-only mode — nothing to publish
+    const qbArr = (allInvoices || []).filter(i => deriveStatus(i) === 'paid' && !i.qbSynced);
+    const count = qbArr.length;
+    const total = qbArr.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    const threeDaysAgo = Date.now() - 3 * 86400000;
+    const staleCount = qbArr.filter(i => (i.paidAt || 0) > 0 && i.paidAt < threeDaysAgo).length;
+    // Skip if nothing changed — avoid spamming Firestore on every keystroke
+    let lastCount = -1;
+    try { lastCount = parseInt(localStorage.getItem(QB_SNAPSHOT_LAST_COUNT_KEY) || '-1', 10); } catch (_e) {}
+    if (lastCount === count && count > 0) return; // unchanged non-zero, skip
+    // Resolve the previous snapshot so TECH-TICKETS only sees ONE open snapshot at a time
+    let priorId = null;
+    try { priorId = localStorage.getItem(QB_SNAPSHOT_EVENT_ID_KEY); } catch (_e) {}
+    if (priorId) {
+      try { await resolveCrossAppEvent(priorId, 'invoice-tracker', 'qb_backlog_snapshot_superseded'); } catch (_e) {}
+      try { localStorage.removeItem(QB_SNAPSHOT_EVENT_ID_KEY); } catch (_e) {}
+    }
+    // If count is 0, just resolve the prior and stop — no need for a "0" snapshot
+    if (count === 0) {
+      try { localStorage.setItem(QB_SNAPSHOT_LAST_COUNT_KEY, '0'); } catch (_e) {}
+      return;
+    }
+    // Compact item list — cap at 20 to stay well under Firestore's 1 MiB doc limit
+    const items = qbArr.slice(0, 20).map(i => ({
+      invoiceNumber: i.invoiceNumber || '',
+      customer: i.customerName || '',
+      amount: Number(i.amount) || 0,
+      paidAt: i.paidAt || null,
+      method: i.paymentMethod || null
+    }));
+    const severity = staleCount > 0 ? 'urgent' : (count >= 5 ? 'warn' : 'info');
+    const result = await publishCrossAppEvent({
+      eventType: 'qb_backlog_snapshot',
+      customerName: '_system_qb_backlog', // sentinel — not a real customer
+      payload: { count, total, staleCount, items, publishedAt: Date.now() },
+      severity,
+      createdBy: 'invoice-tracker'
+    });
+    if (result && result.name) {
+      const eventId = result.name.split('/').pop();
+      try {
+        localStorage.setItem(QB_SNAPSHOT_EVENT_ID_KEY, eventId);
+        localStorage.setItem(QB_SNAPSHOT_LAST_COUNT_KEY, String(count));
+      } catch (_e) {}
+      console.info('[QBSnapshot] Published count=' + count + ' total=$' + total.toFixed(2) + ' id=' + eventId);
+    }
+  } catch (e) {
+    console.warn('[QBSnapshot] Publish failed (non-fatal):', e.message || e);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// MAIN RENDER
+// ════════════════════════════════════════════════════════════
 function computeAndRender() {
   const sorted = [...allInvoices].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   // Refresh the cross-app inbox badge — picks up new resolutions that arrived via Firebase realtime
@@ -3763,9 +3929,28 @@ function computeAndRender() {
   document.getElementById('cntProblemsTab').textContent = getProblemCustomers().length;
   document.getElementById('cntSnoozedTab').textContent = countSnoozed();
   // QB Pending count — paid invoices still awaiting QuickBooks Desktop entry
-  const qbPendingCount = allInvoices.filter(i => deriveStatus(i) === 'paid' && !i.qbSynced).length;
+  // Aging-aware: if ANY unsynced paid is older than 3 days, color the badge red (urgent).
+  const qbPendingArr = allInvoices.filter(i => deriveStatus(i) === 'paid' && !i.qbSynced);
+  const qbPendingCount = qbPendingArr.length;
   const cntQbEl = document.getElementById('cntQbPendingTab');
-  if (cntQbEl) cntQbEl.textContent = qbPendingCount;
+  if (cntQbEl) {
+    cntQbEl.textContent = qbPendingCount;
+    const threeDaysAgo = Date.now() - 3 * 86400000;
+    const hasStale = qbPendingArr.some(i => (i.paidAt || 0) > 0 && i.paidAt < threeDaysAgo);
+    // Visual urgency on the tab badge itself — red when stale, blue otherwise, transparent at zero
+    if (qbPendingCount === 0) {
+      cntQbEl.style.background = 'transparent';
+      cntQbEl.style.color = 'var(--text-mute)';
+    } else if (hasStale) {
+      cntQbEl.style.background = 'var(--pending)';
+      cntQbEl.style.color = 'white';
+    } else {
+      cntQbEl.style.background = '#2563EB';
+      cntQbEl.style.color = 'white';
+    }
+  }
+  // Cross-app publish — debounced, skip-if-unchanged. Fires AFTER count is fresh.
+  _scheduleQbBacklogSnapshotPublish();
   
   // Update unconfirmed alerts banner
   updateUnconfirmedBanner();
@@ -3814,6 +3999,40 @@ function computeAndRender() {
       ? `<strong>${followup} invoice${followup !== 1 ? 's' : ''}</strong> sent +7 days ago without payment mark.`
       : `<strong>${followup} factura${followup !== 1 ? 's' : ''}</strong> enviada${followup !== 1 ? 's' : ''} hace +7 días sin marca de pago.`;
     div.innerHTML = `<span class="alert-icon">⏰</span> ${txt} <button class="btn btn-sm" style="margin-left:auto;background:var(--followup);color:white;padding:4px 10px;font-size:11px;" onclick="window.jumpToFilter('followup')">${seeBtn}</button>`;
+    alertsBox.appendChild(div);
+  }
+
+  // ─── QB BACKLOG ALERT — paid invoices waiting to be entered in QuickBooks Desktop ───
+  // Aging-aware: red if any unsynced paid invoice is >3 days old (real accounting drift risk),
+  // amber otherwise. Hides itself at 0. Click → jumpToFilter('qb_pending').
+  const qbBacklog = allInvoices.filter(i => deriveStatus(i) === 'paid' && !i.qbSynced && !isSnoozed(i));
+  if (qbBacklog.length > 0) {
+    const threeDaysAgo = Date.now() - 3 * 86400000;
+    const staleCount = qbBacklog.filter(i => (i.paidAt || 0) > 0 && i.paidAt < threeDaysAgo).length;
+    const qbTotal = qbBacklog.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    const div = document.createElement('div');
+    div.className = staleCount > 0 ? 'alert-row red' : 'alert-row amber';
+    // Override color to match QB-branding blue when no stale items (still actionable, less urgent)
+    if (staleCount === 0) {
+      div.style.background = '#EFF6FF';
+      div.style.borderColor = '#93C5FD';
+      div.style.color = '#1E40AF';
+    }
+    const txt = en
+      ? `<strong>${qbBacklog.length} paid invoice${qbBacklog.length !== 1 ? 's' : ''}</strong> (${fmtCurrency(qbTotal)}) still need${qbBacklog.length === 1 ? 's' : ''} to be entered in QuickBooks Desktop${staleCount > 0 ? ` · <b>${staleCount} older than 3 days</b>` : ''}.`
+      : `<strong>${qbBacklog.length} factura${qbBacklog.length !== 1 ? 's' : ''} pagada${qbBacklog.length !== 1 ? 's' : ''}</strong> (${fmtCurrency(qbTotal)}) sin entrar en QuickBooks Desktop${staleCount > 0 ? ` · <b>${staleCount} con +3 días</b>` : ''}.`;
+    const btnColor = staleCount > 0 ? 'var(--pending)' : '#2563EB';
+    // Soft "Enable 5pm reminder" CTA — shown ONCE next to the alert when permission not yet granted.
+    // Once enabled, it disappears (replaced by a quieter "🔔 on" hint).
+    let notifLink = '';
+    if (typeof Notification !== 'undefined') {
+      if (_qbNotifEnabled() && Notification.permission === 'granted') {
+        notifLink = `<span title="${escapeHtml(en ? '5pm reminder is on. Click to turn off.' : 'Recordatorio 5pm activo. Click para apagar.')}" onclick="window.disableQbBacklogNotifications()" style="font-size:11px;color:inherit;opacity:0.7;cursor:pointer;padding:2px 6px;">🔔 ${en ? 'on' : 'on'}</span>`;
+      } else if (Notification.permission !== 'denied') {
+        notifLink = `<button onclick="window.enableQbBacklogNotifications()" title="${escapeHtml(en ? 'Get a desktop notification at 5pm if this backlog is still non-zero' : 'Recibir una notificación de escritorio a las 5pm si el backlog sigue >0')}" style="font-size:11px;font-weight:700;background:transparent;border:1px dashed currentColor;color:inherit;padding:3px 9px;border-radius:6px;cursor:pointer;margin:0 6px;">🔔 ${en ? '5pm reminder' : 'Recordatorio 5pm'}</button>`;
+      }
+    }
+    div.innerHTML = `<span class="alert-icon">📒</span> ${txt} ${notifLink}<button class="btn btn-sm" style="margin-left:auto;background:${btnColor};color:white;padding:4px 10px;font-size:11px;" onclick="window.jumpToFilter('qb_pending')">${en ? 'Open backlog →' : 'Abrir backlog →'}</button>`;
     alertsBox.appendChild(div);
   }
   
@@ -3987,7 +4206,26 @@ function renderCustomers() {
 function renderList(invoices) {
   const list = document.getElementById('invoiceList');
   if (invoices.length === 0) {
-    const emptyMsg = allInvoices.length === 0 
+    // ─── Filter-specific empty states — generic "no invoices in this view" hides context ───
+    const en = currentLang === 'en';
+    if (currentFilter === 'qb_pending') {
+      const paidCount = allInvoices.filter(i => deriveStatus(i) === 'paid').length;
+      // Distinguish "all your paid invoices are already in QB" (good) from "you have no paid invoices yet"
+      list.innerHTML = `
+        <div class="empty">
+          <div class="empty-icon">📒</div>
+          <div class="empty-title">${en ? 'No QB backlog 🎉' : 'Sin backlog en QB 🎉'}</div>
+          <div class="empty-text">${
+            paidCount === 0
+              ? (en ? 'No paid invoices yet. When you mark an invoice paid (or upload an Authorize.net PDF with Status: Paid), it lands here until you tick "Already entered in QuickBooks".'
+                    : 'No tienes facturas pagadas todavía. Cuando marques una pagada (o subas un PDF de Authorize.net con Status: Paid), aparece aquí hasta que marques "Already entered in QuickBooks".')
+              : (en ? `All ${paidCount} paid invoice${paidCount !== 1 ? 's are' : ' is'} synced to QuickBooks. Open a paid invoice → 💳 button → uncheck "Already entered in QuickBooks" if one slipped through.`
+                    : `Las ${paidCount} factura${paidCount !== 1 ? 's' : ''} pagada${paidCount !== 1 ? 's están' : ' está'} sincronizada${paidCount !== 1 ? 's' : ''} con QuickBooks. Abre una factura pagada → botón 💳 → destilda "Already entered in QuickBooks" si alguna se te coló.`)
+          }</div>
+        </div>`;
+      return;
+    }
+    const emptyMsg = allInvoices.length === 0
       ? (currentLang === 'en' ? 'Start by adding your first invoice. Each time you create one in QuickBooks, log it here so it doesn\'t get forgotten.' : 'Empieza agregando tu primera factura. Cada vez que crees una en QuickBooks, regístrala aquí para no olvidarla.')
       : (currentLang === 'en' ? 'Change tabs or adjust your search.' : 'Cambia de pestaña o ajusta tu búsqueda.');
     const emptyTitle = currentLang === 'en' ? 'No invoices in this view' : 'No hay facturas en esta vista';
@@ -4324,6 +4562,36 @@ window.openDeleteModal = function(id) {
   document.getElementById('delInvoiceNum').textContent = '#' + inv.invoiceNumber;
   document.getElementById('delCustomer').textContent = inv.customerName;
   document.getElementById('deleteModal').classList.add('open');
+};
+
+// ════════════════════════════════════════════════════════════
+// QUICK-CLOSE QB SYNCED — one-click "I entered this in QuickBooks" toggle.
+// Saves opening the full payment modal when she's batch-clearing the QB Pending tab.
+// History stamps WHO + WHEN to keep audit trail for accounting reconciliation.
+// ════════════════════════════════════════════════════════════
+window.markQbSynced = async function(id) {
+  const inv = allInvoices.find(i => i.id === id);
+  if (!inv) return;
+  const en = currentLang === 'en';
+  if (inv.qbSynced) {
+    // Already synced — offer to un-sync (in case of mistake)
+    if (!confirm(en
+      ? `Invoice #${inv.invoiceNumber} is already marked as entered in QuickBooks. Un-mark it?`
+      : `La factura #${inv.invoiceNumber} ya está marcada como entrada en QuickBooks. ¿Quitar la marca?`)) return;
+    const now = Date.now();
+    const who = getInvoiceTrackerUser() || 'Invoice Tracker';
+    const history = [...(inv.history || []), { ts: now, action: 'qb_unsynced', by: who }];
+    await updateInvoiceData(id, { qbSynced: false, history });
+    toast(en ? '↩ QB sync removed — back in backlog' : '↩ Marca QB removida — vuelve al backlog', 'info');
+    return;
+  }
+  const now = Date.now();
+  const who = getInvoiceTrackerUser() || 'Invoice Tracker';
+  const history = [...(inv.history || []), { ts: now, action: 'qb_synced', by: who }];
+  await updateInvoiceData(id, { qbSynced: true, history });
+  toast(en
+    ? `✅ #${inv.invoiceNumber} marked as entered in QuickBooks`
+    : `✅ #${inv.invoiceNumber} marcada como entrada en QuickBooks`, 'success');
 };
 
 window.confirmDelete = async function() {
@@ -6825,8 +7093,48 @@ window.openPaymentModal = function(id) {
   document.querySelectorAll('#psMethodGroup .ps-radio').forEach(r => {
     r.classList.toggle('active', (r.dataset.method || '') === (inv.paymentMethod || ''));
   });
+  // Show the "⏪ Mark as Unpaid" button only when the invoice is currently paid.
+  // Lets the user reverse a wrong "marked as paid" without leaving the modal.
+  const unpaidBtn = document.getElementById('psUnpaidBtn');
+  if (unpaidBtn) unpaidBtn.style.display = (inv.status === 'paid') ? 'inline-flex' : 'none';
 
   document.getElementById('paymentModal').classList.add('open');
+};
+
+// ════════════════════════════════════════════════════════════
+// MARK AS UNPAID — reverses a wrong "marked as paid" without re-creating the invoice.
+// Keeps the paymentMethod/paymentRef/paymentNote for audit, just clears the paid flag
+// and reverts status to 'sent' (if it was previously sent) or 'pending' otherwise.
+// History entry stamps WHO and WHEN so the audit trail is intact.
+// ════════════════════════════════════════════════════════════
+window.markPaymentAsUnpaid = async function() {
+  if (!psEditingId) return;
+  const inv = allInvoices.find(i => i.id === psEditingId);
+  if (!inv) return;
+  if (inv.status !== 'paid') {
+    toast(currentLang === 'en' ? 'Invoice is not currently paid' : 'La factura no está marcada como pagada', 'info');
+    return;
+  }
+  const en = currentLang === 'en';
+  if (!confirm(en
+    ? `Mark invoice #${inv.invoiceNumber} (${inv.customerName}) as UNPAID?\n\nThis reverses the paid status. The payment method and notes will be kept for reference. The QB sync flag will also be cleared.`
+    : `¿Marcar factura #${inv.invoiceNumber} (${inv.customerName}) como NO PAGADA?\n\nEsto revierte el estado de pagada. El método y notas se mantienen como referencia. La marca de QB sync también se quita.`)) return;
+  // Decide what status to revert to — if the invoice was previously sent (has sentAt), go to 'sent'.
+  // Otherwise back to 'pending'. This keeps the natural lifecycle intact.
+  const revertStatus = inv.sentAt ? 'sent' : 'pending';
+  const now = Date.now();
+  const who = getInvoiceTrackerUser() || 'Invoice Tracker';
+  const history = [...(inv.history || []), { ts: now, action: 'unmarked_paid', by: who, prevStatus: 'paid' }];
+  await updateInvoiceData(psEditingId, {
+    status: revertStatus,
+    paidAt: null,
+    qbSynced: false,  // can't be "synced to QB" if it's not even paid anymore
+    history
+  });
+  toast(en
+    ? `⏪ #${inv.invoiceNumber} reverted to ${revertStatus === 'sent' ? 'SENT' : 'PENDING'} — payment method kept for reference`
+    : `⏪ #${inv.invoiceNumber} revertida a ${revertStatus === 'sent' ? 'ENVIADA' : 'PENDIENTE'} — método se mantiene como referencia`, 'success');
+  closeModal('paymentModal');
 };
 
 window.savePaymentStatus = async function() {
@@ -6855,20 +7163,29 @@ window.savePaymentStatus = async function() {
     fu.setHours(0, 0, 0, 0);
     updates.nextFollowUp = fu.toISOString().slice(0, 10);
   }
-  // If a payment method was selected, auto-mark invoice as paid — EXCEPT for checks not yet deposited
+  // If a payment method was selected, auto-mark invoice as paid — EXCEPT for:
+  //   • Checks not yet deposited (money isn't in our hands yet)
+  //   • Authorize.net selected manually (we generated an invoice but customer hasn't paid yet —
+  //     the "Paid" transition is triggered by uploading the Auth.net PAID PDF, not by picking
+  //     the method. Picking the method just records "this invoice is being collected via Auth.net".)
   let willMarkPaid = false;
   let willMarkCheckPending = false;
+  let willMarkAuthAwaiting = false;
   let willUnmarkPaid = false;
   if (psSelectedMethod) {
     const inv = allInvoices.find(i => i.id === psEditingId);
-    // Special logic for checks: only mark as PAID when the check is "deposited" at the bank.
-    // If it's "with_tech" / "office" / "other", the money isn't actually in our hands yet.
     const checkPendingDeposit = (psSelectedMethod === 'check' && updates.checkLocation !== 'deposited');
+    const authNetAwaitingPayment = (psSelectedMethod === 'auth_net');
     
     if (inv && inv.status !== 'paid') {
       if (checkPendingDeposit) {
         // Don't mark as paid — keep status as pending, but record the method + location
         willMarkCheckPending = true;
+        updates.paymentReason = null;
+      } else if (authNetAwaitingPayment) {
+        // Auth.net invoice generated → customer hasn't paid yet. Status stays pending/sent.
+        // The "Paid" transition happens when she drops the Auth.net Paid PDF.
+        willMarkAuthAwaiting = true;
         updates.paymentReason = null;
       } else {
         // Cash / CC / ACH / Other / Check (deposited) → mark as paid
@@ -6883,6 +7200,9 @@ window.savePaymentStatus = async function() {
       updates.paidAt = null;
       willUnmarkPaid = true;
     }
+    // Note: for auth_net on already-paid invoices, do NOT auto-unmark. The user
+    // unmarks explicitly via the "⏪ Mark as Unpaid" button to avoid surprises when
+    // a Paid PDF correctly already marked it paid.
   }
   await updateInvoiceData(psEditingId, updates);
   let toastMsg;
@@ -6892,6 +7212,10 @@ window.savePaymentStatus = async function() {
     toastMsg = currentLang === 'en'
       ? '📝 Check recorded — invoice stays PENDING until check is deposited at bank'
       : '📝 Cheque registrado — factura sigue PENDIENTE hasta que se deposite en el banco';
+  } else if (willMarkAuthAwaiting) {
+    toastMsg = currentLang === 'en'
+      ? '🔵 Authorize.net method recorded — invoice stays PENDING until customer pays (drop the Paid PDF to flip to paid)'
+      : '🔵 Método Authorize.net registrado — factura sigue PENDIENTE hasta que el cliente pague (arrastra el PDF Pagado para marcar pagada)';
   } else if (willUnmarkPaid) {
     toastMsg = currentLang === 'en'
       ? '⏪ Invoice un-marked as paid — pending check deposit'
@@ -8559,9 +8883,22 @@ window.qbRecLoadFile = async function(event) {
   const en = currentLang === 'en';
   const name = (file.name || '').toLowerCase();
   const isExcel = /\.(xlsx|xlsm|xlsb|xls)$/i.test(name);
+  const isPdf = /\.pdf$/i.test(name);
   const msgEl = document.getElementById('qbRecParseMsg');
+  // CRITICAL: reset the file input value at the very end so re-selecting the SAME file
+  // fires onchange again. Without this, picking the same file twice silently does nothing.
+  const resetInput = () => { try { event.target.value = ''; } catch (_e) {} };
+  // Friendly catch: someone drops a PDF (likely an Authorize.net invoice) into the QB report uploader.
+  // PDFs are NOT bulk reports — they go through the "+ Nueva Factura" → PDF dropzone, not here.
+  if (isPdf) {
+    msgEl.innerHTML = `<span style="color:var(--pending);line-height:1.5;display:block;">⚠ ${en
+      ? "That's a PDF, not a QuickBooks report. PDFs go through <b>+ New Invoice → drag PDF</b> (auto-extracts fields). This uploader expects an <b>Excel/CSV bulk report</b> from QB Desktop."
+      : "Eso es un PDF, no un reporte de QuickBooks. Los PDFs van por <b>+ Nueva Factura → arrastra PDF</b> (auto-extrae campos). Este importador espera un <b>reporte Excel/CSV bulk</b> de QB Desktop."}</span>`;
+    resetInput();
+    return;
+  }
   if (isExcel) {
-    // Excel (.xlsx/.xls) needs a parser — lazy-load SheetJS only when needed.
+    // Excel (.xlsx/.xls/.xlsm/.xlsb) needs a parser — lazy-load SheetJS only when needed.
     msgEl.innerHTML = `<span style="color:var(--text-soft);">${en ? 'Reading Excel…' : 'Leyendo Excel…'}</span>`;
     try {
       const XLSX = await _loadSheetJS();
@@ -8570,19 +8907,37 @@ window.qbRecLoadFile = async function(event) {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const tsv = XLSX.utils.sheet_to_csv(ws, { FS: '\t' });
       document.getElementById('qbRecPaste').value = tsv;
-      msgEl.innerHTML = `<span style="color:var(--sent);">${en ? '✓ Excel loaded — click Analyze' : '✓ Excel cargado — click Analizar'}</span>`;
+      const rowCount = tsv.split('\n').filter(l => l.trim()).length;
+      msgEl.innerHTML = `<span style="color:var(--sent);">${en
+        ? `✓ Excel loaded · ${rowCount} row${rowCount !== 1 ? 's' : ''} ready · click <b>Analyze</b>`
+        : `✓ Excel cargado · ${rowCount} fila${rowCount !== 1 ? 's' : ''} listas · click <b>Analizar</b>`}</span>`;
     } catch (e) {
       console.warn('[QBRec] Excel read failed:', e);
       msgEl.innerHTML = `<span style="color:var(--pending);line-height:1.5;display:block;">⚠ ${en
         ? "Couldn't read Excel (your VPN/blocker may be blocking the reader). <b>Easiest fix:</b> open the file in Excel, select the rows, Copy, and <b>PASTE</b> them in the box above. Or in Excel: File → Save As → CSV, then upload the .csv."
         : "No pude leer el Excel (tu VPN/bloqueador puede estar bloqueando el lector). <b>Más fácil:</b> abre el archivo en Excel, selecciona las filas, Copia y <b>PÉGALAS</b> en el cuadro de arriba. O en Excel: Archivo → Guardar como → CSV, y sube el .csv."}</span>`;
     }
+    resetInput();
     return;
   }
   // CSV / TSV / plain text — read directly, no library needed
+  msgEl.innerHTML = `<span style="color:var(--text-soft);">${en ? 'Reading file…' : 'Leyendo archivo…'}</span>`;
   const reader = new FileReader();
-  reader.onload = e => { document.getElementById('qbRecPaste').value = e.target.result || ''; };
-  reader.onerror = () => toast(en ? 'Could not read file' : 'No se pudo leer el archivo', 'error');
+  reader.onload = e => {
+    const text = e.target.result || '';
+    document.getElementById('qbRecPaste').value = text;
+    // FIX: previously this path had no success feedback, so users saw a stale "Reading…" message
+    // and clicked Analyze before being confident the file actually loaded. Now we confirm it.
+    const rowCount = String(text).split('\n').filter(l => l.trim()).length;
+    msgEl.innerHTML = `<span style="color:var(--sent);">${en
+      ? `✓ File loaded · ${rowCount} row${rowCount !== 1 ? 's' : ''} ready · click <b>Analyze</b>`
+      : `✓ Archivo cargado · ${rowCount} fila${rowCount !== 1 ? 's' : ''} listas · click <b>Analizar</b>`}</span>`;
+    resetInput();
+  };
+  reader.onerror = () => {
+    msgEl.innerHTML = `<span style="color:var(--pending);">⚠ ${en ? "Couldn't read file" : 'No se pudo leer el archivo'}</span>`;
+    resetInput();
+  };
   reader.readAsText(file);
 };
 
@@ -10803,6 +11158,7 @@ function renderInvoiceCardHtml(inv) {
         ${s === 'sent' || s === 'followup' ? `<button class="btn btn-success btn-sm" onclick="window.markAsPaid('${inv.id}')">${escapeHtml(t('card.markPaid'))}</button>` : ''}
         ${s === 'sent' || s === 'followup' ? `<button class="btn btn-secondary btn-sm" onclick="window.openSendModal('${inv.id}')">${escapeHtml(t('card.resend'))}</button>` : ''}
         ${s === 'paid' ? `<button class="btn btn-secondary btn-sm" onclick="window.openSendModal('${inv.id}')" title="${escapeHtml(currentLang === 'en' ? 'Send receipt / resend invoice / send any email to this customer' : 'Mandar recibo / reenviar factura / mandar cualquier email a este cliente')}">📩 ${escapeHtml(currentLang === 'en' ? 'Send' : 'Enviar')}</button>` : ''}
+        ${(s === 'paid' && !inv.qbSynced) ? `<button class="btn btn-sm" onclick="event.stopPropagation();window.markQbSynced('${inv.id}')" title="${escapeHtml(currentLang === 'en' ? 'Mark this invoice as entered in QuickBooks Desktop (removes from QB Pending tab)' : 'Marcar esta factura como entrada en QuickBooks Desktop (sale de QB Pending)')}" style="background:#2563EB;color:#fff;border:none;font-weight:700;">✅ QB</button>` : ''}
         <button class="btn btn-ghost btn-sm" onclick="window.openPaymentModal('${inv.id}')" title="${escapeHtml(t('card.payment.title'))}">💳</button>
         ${(() => {
           // Cross-app alert button — shown when invoice has a payment problem the tech team should know about
