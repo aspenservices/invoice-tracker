@@ -7169,32 +7169,27 @@ window.savePaymentStatus = async function() {
     fu.setHours(0, 0, 0, 0);
     updates.nextFollowUp = fu.toISOString().slice(0, 10);
   }
-  // If a payment method was selected, auto-mark invoice as paid — EXCEPT for:
-  //   • Checks not yet deposited (money isn't in our hands yet)
-  //   • Authorize.net selected manually (we generated an invoice but customer hasn't paid yet —
-  //     the "Paid" transition is triggered by uploading the Auth.net PAID PDF, not by picking
-  //     the method. Picking the method just records "this invoice is being collected via Auth.net".)
+  // If a payment method was selected, auto-mark invoice as paid — EXCEPT for
+  // checks not yet deposited (money isn't in our hands yet).
+  // NOTE: Auth.net used to be treated as "awaiting" but that was wrong — her
+  // dominant workflow is "customer paid via Auth.net Virtual Terminal", so
+  // Auth.net now behaves like cash/CC/ACH. For the "I sent an Auth.net invoice
+  // and am waiting for payment" case, leave method UNSELECTED and pick a
+  // reason like "Pending payment" + set a follow-up date.
   let willMarkPaid = false;
   let willMarkCheckPending = false;
-  let willMarkAuthAwaiting = false;
   let willUnmarkPaid = false;
   if (psSelectedMethod) {
     const inv = allInvoices.find(i => i.id === psEditingId);
     const checkPendingDeposit = (psSelectedMethod === 'check' && updates.checkLocation !== 'deposited');
-    const authNetAwaitingPayment = (psSelectedMethod === 'auth_net');
     
     if (inv && inv.status !== 'paid') {
       if (checkPendingDeposit) {
         // Don't mark as paid — keep status as pending, but record the method + location
         willMarkCheckPending = true;
         updates.paymentReason = null;
-      } else if (authNetAwaitingPayment) {
-        // Auth.net invoice generated → customer hasn't paid yet. Status stays pending/sent.
-        // The "Paid" transition happens when she drops the Auth.net Paid PDF.
-        willMarkAuthAwaiting = true;
-        updates.paymentReason = null;
       } else {
-        // Cash / CC / ACH / Other / Check (deposited) → mark as paid
+        // Cash / CC / ACH / Auth.net / Other / Check (deposited) → mark as paid
         updates.status = 'paid';
         updates.paidAt = Date.now();
         updates.paymentReason = null;
@@ -7206,9 +7201,6 @@ window.savePaymentStatus = async function() {
       updates.paidAt = null;
       willUnmarkPaid = true;
     }
-    // Note: for auth_net on already-paid invoices, do NOT auto-unmark. The user
-    // unmarks explicitly via the "⏪ Mark as Unpaid" button to avoid surprises when
-    // a Paid PDF correctly already marked it paid.
   }
   await updateInvoiceData(psEditingId, updates);
   let toastMsg;
@@ -7218,10 +7210,6 @@ window.savePaymentStatus = async function() {
     toastMsg = currentLang === 'en'
       ? '📝 Check recorded — invoice stays PENDING until check is deposited at bank'
       : '📝 Cheque registrado — factura sigue PENDIENTE hasta que se deposite en el banco';
-  } else if (willMarkAuthAwaiting) {
-    toastMsg = currentLang === 'en'
-      ? '🔵 Authorize.net method recorded — invoice stays PENDING until customer pays (drop the Paid PDF to flip to paid)'
-      : '🔵 Método Authorize.net registrado — factura sigue PENDIENTE hasta que el cliente pague (arrastra el PDF Pagado para marcar pagada)';
   } else if (willUnmarkPaid) {
     toastMsg = currentLang === 'en'
       ? '⏪ Invoice un-marked as paid — pending check deposit'
