@@ -5,46 +5,50 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Aspen Spas — Invoice Tracker</title>
 <!-- Favicon: dark navy square with white "AS" + orange Aspen accent dot -->
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f172a'/%3E%3Ctext x='50%25' y='62%25' font-family='Inter,system-ui,sans-serif' font-size='28' font-weight='800' fill='%23ffffff' text-anchor='middle' dominant-baseline='middle'%3EAS%3C/text%3E%3Ccircle cx='50' cy='14' r='6' fill='%23D4772C'/%3E%3C/svg%3E">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f172a'/%3E%3Ctext x='50%25' y='62%25' font-family='Inter,sans-serif' font-size='28' font-weight='800' fill='%23ffffff' text-anchor='middle' dominant-baseline='middle'%3EAS%3C/text%3E%3Ccircle cx='50' cy='14' r='6' fill='%23D4772C'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23134A63'/%3E%3Ctext x='50%25' y='62%25' font-family='Poppins,system-ui,sans-serif' font-size='28' font-weight='800' fill='%23ffffff' text-anchor='middle' dominant-baseline='middle'%3EAS%3C/text%3E%3Ccircle cx='50' cy='14' r='6' fill='%23B5733A'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23134A63'/%3E%3Ctext x='50%25' y='62%25' font-family='Poppins,sans-serif' font-size='28' font-weight='800' fill='%23ffffff' text-anchor='middle' dominant-baseline='middle'%3EAS%3C/text%3E%3Ccircle cx='50' cy='14' r='6' fill='%23B5733A'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 :root {
-  --bg: #FAFAF9;
-  --bg-soft: #F4F4F5;
+  /* ═══ ASPEN OPS · Línea de Agua — LIGHT (Porcelana Spa) ═══ */
+  --bg: #F4F8F9;              /* porcelana, no blanco puro */
+  --bg-soft: #EDF3F5;
   --bg-card: #FFFFFF;
   --bg-elev: #FFFFFF;
-  --text: #18181B;
-  --text-soft: #52525B;
-  --text-mute: #A1A1AA;
-  --border: #E4E4E7;
-  --border-soft: #F1F1F2;
-  --primary: #0F172A;
-  --accent: #0369A1;
-  --accent-soft: #E0F2FE;
-  --pending: #DC2626;
-  --pending-bg: #FEF2F2;
-  --sent: #16A34A;
-  --sent-bg: #F0FDF4;
-  --paid: #2563EB;
-  --paid-bg: #EFF6FF;
-  --followup: #D97706;
-  --followup-bg: #FFFBEB;
-  --shadow-xs: 0 1px 1px rgba(0,0,0,0.04);
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
-  --shadow-lg: 0 12px 32px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.06);
+  --text: #1F2A30;           /* Charcoal Aspen */
+  --text-soft: #4A5A62;
+  --text-mute: #8CA0A8;
+  --border: #DFE9EC;
+  --border-soft: #EDF3F5;
+  --primary: #134A63;        /* Deep Blue Aspen */
+  --accent: #1C8FA8;         /* Teal Aspen */
+  --accent-soft: #E1F1F4;
+  /* Status — anclados a marca, mismo significado en todo el ecosistema */
+  --pending: #C0492F;        /* danger/overdue */
+  --pending-bg: #FBEEEA;
+  --sent: #2E8B57;           /* success/paid */
+  --sent-bg: #EAF6EF;
+  --paid: #1C8FA8;           /* info = teal */
+  --paid-bg: #E1F1F4;
+  --followup: #B5733A;       /* copper — warm accent */
+  --followup-bg: #FAF1E9;
+  --shadow-xs: 0 1px 1px rgba(19,74,99,0.04);
+  --shadow-sm: 0 1px 3px rgba(19,74,99,0.06), 0 1px 2px rgba(19,74,99,0.04);
+  --shadow-md: 0 4px 12px rgba(19,74,99,0.07), 0 2px 4px rgba(19,74,99,0.05);
+  --shadow-lg: 0 12px 32px rgba(19,74,99,0.11), 0 4px 8px rgba(19,74,99,0.06);
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 14px;
   --r-xl: 20px;
+  /* brand-true refs for large elements */
+  --ops-teal: #1C8FA8; --ops-aqua: #4FC3D9; --ops-copper: #B5733A; --ops-deep: #134A63;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
   font-size: 14px;
@@ -79,7 +83,7 @@ textarea { resize: vertical; min-height: 80px; }
 /* HEADER */
 .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; gap: 24px; flex-wrap: wrap; }
 .brand { display: flex; flex-direction: column; gap: 4px; }
-.brand-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--primary); }
+.brand-title { font-size: 22px; font-weight: 600; font-family:'Poppins',sans-serif; letter-spacing: -0.02em; color: var(--primary); }
 .brand-sub { font-size: 12px; color: var(--text-mute); font-weight: 500; }
 .brand-mark { display: inline-flex; align-items: center; gap: 8px; }
 .brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -116,7 +120,7 @@ textarea { resize: vertical; min-height: 80px; }
    Cards: green = good, amber = attention, red = critical, neutral = info
    ════════════════════════════════════════════════════════════ */
 .dash-header { margin-bottom: 16px; }
-.dash-header h2 { font-size: 20px; font-weight: 800; margin: 0 0 4px; color: var(--text); letter-spacing: -0.02em; }
+.dash-header h2 { font-size: 20px; font-weight: 700; font-family:'Poppins',sans-serif; margin: 0 0 4px; color: var(--text); letter-spacing: -0.02em; }
 .dash-header p { font-size: 13px; color: var(--text-soft); margin: 0; }
 .dash-grid {
   display: grid;
@@ -388,8 +392,8 @@ textarea { resize: vertical; min-height: 80px; }
 .email-stage-radio:hover { border-color: var(--text-mute); }
 .email-stage-radio.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .email-stage-radio.active[data-stage="2"] { border-color: #C2410C; background: #FFF7ED; color: #9A3412; }
-.email-stage-radio.active[data-stage="3"] { border-color: #B91C1C; background: #FEF2F2; color: #7F1D1D; }
-.email-stage-radio.active[data-stage="4"] { border-color: #15803D; background: #F0FDF4; color: #14532D; }
+.email-stage-radio.active[data-stage="3"] { border-color: #C0492F; background: #FEF2F2; color: #7F1D1D; }
+.email-stage-radio.active[data-stage="4"] { border-color: #2E8B57; background: #F0FDF4; color: #14532D; }
 
 .invoice-status {
   width: 8px;
@@ -404,11 +408,11 @@ textarea { resize: vertical; min-height: 80px; }
 
 .invoice-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .invoice-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.invoice-num { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 13px; color: var(--text); padding: 2px 8px; background: var(--bg-soft); border-radius: 6px; }
+.invoice-num { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13px; color: var(--text); padding: 2px 8px; background: var(--bg-soft); border-radius: 6px; }
 .invoice-customer { font-weight: 600; font-size: 14px; color: var(--text); }
 .invoice-meta { display: flex; gap: 14px; font-size: 12px; color: var(--text-soft); flex-wrap: wrap; }
 .invoice-meta span { display: inline-flex; align-items: center; gap: 4px; }
-.invoice-amount { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 16px; color: var(--text); }
+.invoice-amount { font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 16px; color: var(--text); }
 
 .status-badge {
   display: inline-flex;
@@ -767,7 +771,7 @@ input.field-err, textarea.field-err, select.field-err {
 .cd-row-label { font-size: 11px; color: var(--text-mute); font-weight: 500; }
 .cd-row-value { font-size: 13px; color: var(--text); font-weight: 500; word-break: break-word; }
 .cd-row-value.empty { color: var(--text-mute); font-style: italic; font-weight: 400; }
-.cd-row-value.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.cd-row-value.mono { font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
 
 .cd-summary-row {
   display: grid;
@@ -782,7 +786,7 @@ input.field-err, textarea.field-err, select.field-err {
   border-radius: var(--r-md);
 }
 .cd-summary-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-mute); font-weight: 600; }
-.cd-summary-value { font-size: 18px; font-weight: 700; color: var(--text); margin-top: 4px; font-family: 'JetBrains Mono', monospace; letter-spacing: -0.02em; }
+.cd-summary-value { font-size: 18px; font-weight: 700; color: var(--text); margin-top: 4px; font-family: 'IBM Plex Mono', monospace; letter-spacing: -0.02em; }
 .cd-summary-card.danger .cd-summary-value { color: var(--pending); }
 .cd-summary-card.warn .cd-summary-value { color: var(--followup); }
 .cd-summary-card.success .cd-summary-value { color: var(--sent); }
@@ -803,9 +807,9 @@ input.field-err, textarea.field-err, select.field-err {
   transition: all 0.15s;
 }
 .cd-inv-row:hover { border-color: var(--text-mute); }
-.cd-inv-num { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 2px 8px; background: var(--bg-soft); border-radius: 6px; font-weight: 600; }
+.cd-inv-num { font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 2px 8px; background: var(--bg-soft); border-radius: 6px; font-weight: 600; }
 .cd-inv-date { color: var(--text-soft); font-size: 12px; }
-.cd-inv-amount { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+.cd-inv-amount { font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
 .cd-inv-status { font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 
 /* Ticket cards inside detail modal */
@@ -892,7 +896,7 @@ input.field-err, textarea.field-err, select.field-err {
   padding: 8px 10px;
   border: 1px solid #BAE6FD;
   border-radius: var(--r-sm);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 11px;
   background: white;
   resize: vertical;
@@ -943,7 +947,7 @@ input.field-err, textarea.field-err, select.field-err {
   background: white;
   font-family: inherit;
 }
-.cust-name-row .req { color: #DC2626; }
+.cust-name-row .req { color: #C0492F; }
 
 /* Collapsible import tools (QB paste + TICKETS search) */
 .cust-import-tools {
@@ -1122,7 +1126,7 @@ input.field-err, textarea.field-err, select.field-err {
   font-size: 12px;
 }
 .cd-comp-item-label { color: var(--text-mute); font-weight: 500; }
-.cd-comp-item-val { color: var(--text); font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+.cd-comp-item-val { color: var(--text); font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
 
 /* Payment status form */
 .ps-form-grid { display: grid; gap: 14px; }
@@ -1177,7 +1181,7 @@ input.field-err, textarea.field-err, select.field-err {
   letter-spacing: -0.01em;
 }
 .aging-total {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 18px;
   font-weight: 700;
   color: var(--text);
@@ -1199,7 +1203,7 @@ input.field-err, textarea.field-err, select.field-err {
 }
 .aging-band:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
 .aging-band-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
-.aging-band-amt { font-family: 'JetBrains Mono', monospace; font-size: 17px; font-weight: 700; margin-top: 4px; letter-spacing: -0.02em; }
+.aging-band-amt { font-family: 'IBM Plex Mono', monospace; font-size: 17px; font-weight: 700; margin-top: 4px; letter-spacing: -0.02em; }
 .aging-band-count { font-size: 10px; opacity: 0.8; margin-top: 2px; }
 .aging-band-bar {
   position: absolute;
@@ -1211,7 +1215,7 @@ input.field-err, textarea.field-err, select.field-err {
 .aging-band.fresh { background: #ECFDF5; border-color: #A7F3D0; color: #047857; }
 .aging-band.warn { background: #FEFCE8; border-color: #FDE68A; color: #A16207; }
 .aging-band.late { background: #FFF7ED; border-color: #FED7AA; color: #C2410C; }
-.aging-band.critical { background: #FEF2F2; border-color: #FECACA; color: #B91C1C; }
+.aging-band.critical { background: #FEF2F2; border-color: #FECACA; color: #C0492F; }
 .aging-band.empty { opacity: 0.4; cursor: default; }
 
 @media (max-width: 600px) {
@@ -1277,7 +1281,7 @@ input.field-err, textarea.field-err, select.field-err {
   margin-top: 4px;
 }
 .prob-stat {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 13px;
   font-weight: 700;
   color: var(--pending);
@@ -1427,6 +1431,18 @@ input.field-err, textarea.field-err, select.field-err {
   #crossAppInboxModal .modal-footer .btn { width: auto; }
   #crossAppInboxStatus { font-size: 10px !important; padding: 6px 8px !important; }
 }
+
+/* ═══ ASPEN OPS — brand additions ═══ */
+.aspen-logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--ops-teal),var(--ops-deep) 60%,var(--ops-copper) 130%);display:inline-flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-weight:700;font-size:14px;color:#fff;letter-spacing:.5px;box-shadow:0 4px 14px rgba(28,143,168,.3)}
+.ops-waterline{position:relative;height:30px;margin:-8px 0 18px;overflow:hidden}
+.ops-waterline svg{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 2px 6px rgba(79,195,217,.28))}
+.ops-wl-glint{animation:opsGlint 7s linear infinite}
+@keyframes opsGlint{to{stroke-dashoffset:-96}}
+.ops-ripple-wave{position:absolute;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(28,143,168,.22) 0%,rgba(28,143,168,.08) 45%,transparent 70%);
+  transform:translate(-50%,-50%) scale(0);animation:opsRipple .7s cubic-bezier(.25,.1,.25,1) forwards}
+@keyframes opsRipple{to{transform:translate(-50%,-50%) scale(1);opacity:0}}
+@media (prefers-reduced-motion: reduce){.ops-ripple-wave{display:none}.ops-wl-glint{animation:none}}
 </style>
 </head>
 <body>
@@ -1437,7 +1453,7 @@ input.field-err, textarea.field-err, select.field-err {
   <header class="header">
     <div class="brand">
       <div class="brand-mark">
-        <span class="brand-dot"></span>
+        <span class="aspen-logo">AS</span>
         <span class="brand-title">Invoice Tracker</span>
       </div>
       <span class="brand-sub" data-i18n="app.subtitle">Aspen Spas · service2@aspenspas.com</span>
@@ -1455,6 +1471,40 @@ input.field-err, textarea.field-err, select.field-err {
       <button class="icon-btn" onclick="openSettingsModal()" data-i18n-title="header.settings">⚙</button>
     </div>
   </header>
+
+  <!-- ═══ LÍNEA DE AGUA — Aspen OPS signature (light) ═══ -->
+  <div class="ops-waterline" aria-hidden="true">
+    <svg viewBox="0 0 1100 34" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="ops-wl-grad" x1="0" x2="1">
+          <stop offset="0" stop-color="#1C8FA8" stop-opacity=".3"/>
+          <stop offset=".5" stop-color="#4FC3D9" stop-opacity="1"/>
+          <stop offset="1" stop-color="#B5733A" stop-opacity=".55"/>
+        </linearGradient>
+        <linearGradient id="ops-wl-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#4FC3D9" stop-opacity=".16"/>
+          <stop offset="1" stop-color="#4FC3D9" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path fill="url(#ops-wl-fill)"
+        d="M0,14 C140,10 260,18 400,14 S680,10 820,14 S1020,18 1100,13 L1100,34 L0,34 Z">
+        <animate attributeName="d" dur="9s" repeatCount="indefinite"
+          values="M0,14 C140,10 260,18 400,14 S680,10 820,14 S1020,18 1100,13 L1100,34 L0,34 Z;
+                  M0,13 C140,17 260,11 400,15 S680,18 820,12 S1020,11 1100,15 L1100,34 L0,34 Z;
+                  M0,14 C140,10 260,18 400,14 S680,10 820,14 S1020,18 1100,13 L1100,34 L0,34 Z"/>
+      </path>
+      <path fill="none" stroke="url(#ops-wl-grad)" stroke-width="1.6"
+        d="M0,14 C140,10 260,18 400,14 S680,10 820,14 S1020,18 1100,13">
+        <animate attributeName="d" dur="9s" repeatCount="indefinite"
+          values="M0,14 C140,10 260,18 400,14 S680,10 820,14 S1020,18 1100,13;
+                  M0,13 C140,17 260,11 400,15 S680,18 820,12 S1020,11 1100,15;
+                  M0,14 C140,10 260,18 400,14 S680,10 820,14 S1020,18 1100,13"/>
+      </path>
+      <path fill="none" stroke="rgba(181,115,58,.55)" stroke-width="1" stroke-linecap="round"
+        stroke-dasharray="2 46" class="ops-wl-glint"
+        d="M0,14 C140,10 260,18 400,14 S680,10 820,14 S1020,18 1100,13"/>
+    </svg>
+  </div>
 
   <!-- SYNC WARNING (shown only when NOT connected to Firebase) -->
   <div id="syncWarning" style="display:none;align-items:center;gap:14px;padding:14px 18px;margin-bottom:16px;background:#FFF7ED;border:1px solid #FED7AA;border-left:4px solid #C2410C;border-radius:var(--r-md);color:#9A3412;font-size:13px;font-weight:600;"></div>
@@ -1505,7 +1555,7 @@ input.field-err, textarea.field-err, select.field-err {
   <div class="alerts" id="alertsBox"></div>
 
   <!-- TODAY'S REVENUE — prominent stat card -->
-  <div id="todayRevenueCard" style="display:none;background:linear-gradient(135deg, #0F172A 0%, #1E293B 100%);color:white;padding:18px 24px;border-radius:var(--r-md);margin-bottom:16px;box-shadow:0 4px 16px rgba(15,23,42,0.15);">
+  <div id="todayRevenueCard" style="display:none;background:linear-gradient(135deg, #134A63 0%, #1E293B 100%);color:white;padding:18px 24px;border-radius:var(--r-md);margin-bottom:16px;box-shadow:0 4px 16px rgba(15,23,42,0.15);">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">
       <div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#94A3B8;margin-bottom:2px;" data-i18n="today.revenue.label">📤 Hoy</div>
@@ -1559,7 +1609,7 @@ input.field-err, textarea.field-err, select.field-err {
     <button class="tab tab-followup" data-filter="followup"><span data-i18n="tab.followup">Por cobrar</span> <span class="tab-count" id="cntFollowupTab">0</span></button>
     <button class="tab" data-filter="sent"><span data-i18n="tab.sent">Enviadas</span> <span class="tab-count" id="cntSentTab">0</span></button>
     <button class="tab" data-filter="paid"><span data-i18n="tab.paid">Pagadas</span> <span class="tab-count" id="cntPaidTab">0</span></button>
-    <button class="tab" data-filter="qb_pending"><span data-i18n="tab.qbPending">💳 Paid · QB Pending</span> <span class="tab-count" id="cntQbPendingTab" style="background:#2563EB;color:white;">0</span></button>
+    <button class="tab" data-filter="qb_pending"><span data-i18n="tab.qbPending">💳 Paid · QB Pending</span> <span class="tab-count" id="cntQbPendingTab" style="background:#1C8FA8;color:white;">0</span></button>
     <button class="tab" data-filter="snoozed"><span data-i18n="tab.snoozed">💤 Snoozeadas</span> <span class="tab-count" id="cntSnoozedTab" style="background:#7c3aed;color:white;">0</span></button>
     <button class="tab" data-filter="problems"><span data-i18n="tab.problems">🚨 Problemas</span> <span class="tab-count" id="cntProblemsTab" style="background:#9F1239;color:white;">0</span></button>
     <button class="tab" data-filter="customers"><span data-i18n="tab.customers">👥 Clientes</span> <span class="tab-count" id="cntCustomersTab">0</span></button>
@@ -1753,7 +1803,7 @@ input.field-err, textarea.field-err, select.field-err {
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('sendModal')">Cerrar</button>
       <button class="btn btn-primary" onclick="generateEmlAndDownload()">📎 Generar email con PDF adjunto</button>
-      <button class="btn" id="sendSmsBtn" onclick="sendViaSms()" style="background:#22C55E;color:white;display:none;">📱 Enviar por iMessage/SMS</button>
+      <button class="btn" id="sendSmsBtn" onclick="sendViaSms()" style="background:#2E8B57;color:white;display:none;">📱 Enviar por iMessage/SMS</button>
       <button class="btn btn-ghost" id="markSentBtn" onclick="markAsSent()" style="font-size:11px;color:var(--text-mute);">Marcar enviada manualmente</button>
     </div>
   </div>
@@ -1801,7 +1851,7 @@ input.field-err, textarea.field-err, select.field-err {
             <span><b id="qbRecModePaidT">Pagos recibidos</b><br><span style="font-size:11px;color:var(--text-soft);" id="qbRecModePaidD">Lo que SÍ esté en la lista = se pagó</span></span>
           </label>
         </div>
-        <textarea id="qbRecPaste" rows="9" placeholder="Pega aquí las filas copiadas de Excel/QB…  (Type	Num	Date	Name	Amount …)" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:8px;font-size:12px;font-family:'JetBrains Mono',monospace;resize:vertical;box-sizing:border-box;line-height:1.5;"></textarea>
+        <textarea id="qbRecPaste" rows="9" placeholder="Pega aquí las filas copiadas de Excel/QB…  (Type	Num	Date	Name	Amount …)" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:8px;font-size:12px;font-family:'IBM Plex Mono',monospace;resize:vertical;box-sizing:border-box;line-height:1.5;"></textarea>
         <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">
           <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;">
             📁 <span id="qbRecUploadLbl">Subir Excel/CSV</span>
@@ -1968,7 +2018,7 @@ input.field-err, textarea.field-err, select.field-err {
 
             <div class="cust-section-header">📋 Notas QuickBooks (texto raw de referencia)</div>
             <div class="field">
-              <textarea id="cQbRaw" rows="6" placeholder="Se llena automáticamente al parsear. Se guarda como referencia." style="font-family:'JetBrains Mono',monospace;font-size:11px;"></textarea>
+              <textarea id="cQbRaw" rows="6" placeholder="Se llena automáticamente al parsear. Se guarda como referencia." style="font-family:'IBM Plex Mono',monospace;font-size:11px;"></textarea>
             </div>
           </div>
         </div>
@@ -2019,7 +2069,7 @@ input.field-err, textarea.field-err, select.field-err {
   "storageBucket": "invoice-daily-f170e.appspot.com",
   "messagingSenderId": "...",
   "appId": "..."
-}' style="min-height:160px; font-family:'JetBrains Mono', monospace; font-size:12px;"></textarea>
+}' style="min-height:160px; font-family:'IBM Plex Mono', monospace; font-size:12px;"></textarea>
             <span class="field-hint">Si lo dejas vacío, usa el config hardcodeado de Aspen Spas (lo normal).</span>
           </div>
 
@@ -2156,7 +2206,7 @@ input.field-err, textarea.field-err, select.field-err {
           <span class="cd-toggle">▼</span> 📝 Notas originales de QuickBooks
         </div>
         <div class="cd-section-content" style="display:none;">
-          <pre id="cdQbRaw" style="white-space:pre-wrap;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-soft);background:var(--bg-soft);padding:12px;border-radius:8px;margin:0;"></pre>
+          <pre id="cdQbRaw" style="white-space:pre-wrap;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-soft);background:var(--bg-soft);padding:12px;border-radius:8px;margin:0;"></pre>
         </div>
       </div>
 
@@ -2322,7 +2372,7 @@ input.field-err, textarea.field-err, select.field-err {
 <div class="modal-backdrop" id="paymentModal">
   <div class="modal">
     <div class="modal-header">
-      <span class="modal-title"><span data-i18n="payment.title">💳 Estado de cobro</span> <span id="psInvNum" style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text-soft);font-weight:500;"></span></span>
+      <span class="modal-title"><span data-i18n="payment.title">💳 Estado de cobro</span> <span id="psInvNum" style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--text-soft);font-weight:500;"></span></span>
       <button class="modal-close" onclick="closeModal('paymentModal')">×</button>
     </div>
     <div class="modal-body">
@@ -2345,7 +2395,7 @@ input.field-err, textarea.field-err, select.field-err {
           <!-- Closes the loop between Auth.net/external collections and QuickBooks Desktop entry. -->
           <div id="psQbSyncBlock" style="display:none;margin-top:12px;padding:12px;background:#EFF6FF;border:1px solid #93C5FD;border-radius:var(--r-md);">
             <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
-              <input type="checkbox" id="psQbSynced" style="margin-top:2px;width:16px;height:16px;cursor:pointer;accent-color:#2563EB;">
+              <input type="checkbox" id="psQbSynced" style="margin-top:2px;width:16px;height:16px;cursor:pointer;accent-color:#1C8FA8;">
               <span style="flex:1;">
                 <span style="font-size:12px;font-weight:700;color:#1E40AF;display:block;" data-i18n="payment.qbSync.label">📒 Already entered in QuickBooks</span>
                 <span style="font-size:11px;color:#1E40AF;opacity:0.85;line-height:1.45;display:block;margin-top:3px;" data-i18n="payment.qbSync.hint">Leave unchecked if you still need to record this payment in QB Desktop. Unsynced payments appear in the "💳 Paid · QB Pending" tab.</span>
@@ -3951,7 +4001,7 @@ function computeAndRender() {
       cntQbEl.style.background = 'var(--pending)';
       cntQbEl.style.color = 'white';
     } else {
-      cntQbEl.style.background = '#2563EB';
+      cntQbEl.style.background = '#1C8FA8';
       cntQbEl.style.color = 'white';
     }
   }
@@ -4027,7 +4077,7 @@ function computeAndRender() {
     const txt = en
       ? `<strong>${qbBacklog.length} paid invoice${qbBacklog.length !== 1 ? 's' : ''}</strong> (${fmtCurrency(qbTotal)}) still need${qbBacklog.length === 1 ? 's' : ''} to be entered in QuickBooks Desktop${staleCount > 0 ? ` · <b>${staleCount} older than 3 days</b>` : ''}.`
       : `<strong>${qbBacklog.length} factura${qbBacklog.length !== 1 ? 's' : ''} pagada${qbBacklog.length !== 1 ? 's' : ''}</strong> (${fmtCurrency(qbTotal)}) sin entrar en QuickBooks Desktop${staleCount > 0 ? ` · <b>${staleCount} con +3 días</b>` : ''}.`;
-    const btnColor = staleCount > 0 ? 'var(--pending)' : '#2563EB';
+    const btnColor = staleCount > 0 ? 'var(--pending)' : '#1C8FA8';
     // Soft "Enable 5pm reminder" CTA — shown ONCE next to the alert when permission not yet granted.
     // Once enabled, it disappears (replaced by a quieter "🔔 on" hint).
     let notifLink = '';
@@ -5336,7 +5386,7 @@ function buildEmailHtmlBody(inv, stage) {
   const spaLine = inv.spaModel ? `<tr><td style="padding:8px 0; color:#666; font-size:14px;">Spa:</td><td style="padding:8px 0; color:#0f172a;">${escapeHtml(inv.spaModel)}${inv.serialNumber ? ' · S/N ' + escapeHtml(inv.serialNumber) : ''}</td></tr>` : '';
   
   // Stage-specific header banner color/label
-  const headerBg = stage === 4 ? '#15803D' : (stage === 3 ? '#7f1d1d' : (stage === 2 ? '#9a3412' : '#0f172a'));
+  const headerBg = stage === 4 ? '#2E8B57' : (stage === 3 ? '#7f1d1d' : (stage === 2 ? '#9a3412' : '#0f172a'));
   const headerLabel = stage === 4 ? '✅ PAID — THANK YOU' : (stage === 3 ? 'PAST DUE' : (stage === 2 ? 'REMINDER' : 'INVOICE'));
   
   // Stage-specific intro paragraph (HTML) — stages 1 and 4 contain HTML <strong> tags, others are plain text
@@ -5636,7 +5686,7 @@ window.sendViaSms = function() {
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
   
   const stepsHtml = hasPdf ? `
-    <div style="text-align:left;background:#F1F5F9;padding:14px 16px;border-radius:8px;font-size:13px;line-height:1.7;color:#0F172A;">
+    <div style="text-align:left;background:#F1F5F9;padding:14px 16px;border-radius:8px;font-size:13px;line-height:1.7;color:#134A63;">
       <div style="font-weight:700;margin-bottom:8px;">${en ? 'Steps to send with PDF:' : 'Pasos para enviar con PDF:'}</div>
       <div>✅ <strong>${en ? 'PDF downloaded' : 'PDF descargado'}:</strong> <code style="background:white;padding:2px 6px;border-radius:4px;font-size:11px;">${escapeHtml(pdfFilename)}</code></div>
       <div>2️⃣ ${en ? 'Click "Open Messages" below — Messages opens with text pre-filled.' : 'Click "Abrir Messages" abajo — Messages se abrirá con el texto pre-llenado.'}</div>
@@ -5644,7 +5694,7 @@ window.sendViaSms = function() {
       <div>4️⃣ ${en ? 'Click Send in Messages.' : 'Click Send en Messages.'}</div>
       <div>5️⃣ ${en ? 'Come back here to confirm.' : 'Vuelve aquí a confirmar.'}</div>
     </div>` : `
-    <div style="text-align:left;background:#F1F5F9;padding:14px 16px;border-radius:8px;font-size:13px;line-height:1.7;color:#0F172A;">
+    <div style="text-align:left;background:#F1F5F9;padding:14px 16px;border-radius:8px;font-size:13px;line-height:1.7;color:#134A63;">
       <div style="font-weight:700;margin-bottom:8px;">${en ? 'Note:' : 'Nota:'}</div>
       <div>⚠ ${en ? 'This invoice has no PDF saved. Only the text message will be sent.' : 'Esta factura no tiene PDF guardado. Solo se enviará el texto.'}</div>
       <div>2️⃣ ${en ? 'Click "Open Messages" below.' : 'Click "Abrir Messages" abajo.'}</div>
@@ -5654,11 +5704,11 @@ window.sendViaSms = function() {
   overlay.innerHTML = `
     <div style="background:white;border-radius:16px;max-width:500px;width:100%;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,0.3);">
       <div style="font-size:36px;text-align:center;margin-bottom:8px;">📱</div>
-      <h3 style="margin:0 0 16px 0;text-align:center;font-size:18px;color:#0F172A;">${en ? 'Send via iMessage/SMS' : 'Enviar por iMessage/SMS'}</h3>
+      <h3 style="margin:0 0 16px 0;text-align:center;font-size:18px;color:#134A63;">${en ? 'Send via iMessage/SMS' : 'Enviar por iMessage/SMS'}</h3>
       <div style="text-align:center;font-size:13px;color:#475569;margin-bottom:14px;">${en ? 'To' : 'Para'}: <strong>${escapeHtml(inv.customerName)}</strong> · 📱 ${escapeHtml(cleanPhone)}</div>
       ${stepsHtml}
       <div style="display:flex;gap:8px;flex-direction:column;margin-top:16px;">
-        <button onclick="window.openMessagesWithSms('${invNum}', '${cleanPhone}', this)" data-sms-url="${escapeHtml(smsUrl)}" style="background:#22C55E;color:white;border:0;padding:14px 16px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">
+        <button onclick="window.openMessagesWithSms('${invNum}', '${cleanPhone}', this)" data-sms-url="${escapeHtml(smsUrl)}" style="background:#2E8B57;color:white;border:0;padding:14px 16px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">
           📱 ${en ? 'Open Messages now' : 'Abrir Messages ahora'}
         </button>
         <button onclick="document.getElementById('confirmSendOverlay').remove();" style="background:#F1F5F9;color:#475569;border:0;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;">
@@ -5695,14 +5745,14 @@ window.openMessagesWithSms = function(invNum, phone, btnEl) {
       overlay.innerHTML = `
         <div style="background:white;border-radius:16px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,0.3);">
           <div style="font-size:36px;text-align:center;margin-bottom:8px;">📱</div>
-          <h3 style="margin:0 0 12px 0;text-align:center;font-size:18px;color:#0F172A;">${en ? 'Did you send the SMS?' : '¿Enviaste el SMS?'}</h3>
+          <h3 style="margin:0 0 12px 0;text-align:center;font-size:18px;color:#134A63;">${en ? 'Did you send the SMS?' : '¿Enviaste el SMS?'}</h3>
           <p style="margin:0 0 20px 0;text-align:center;font-size:14px;color:#475569;line-height:1.5;">
             ${en
               ? `In Messages, did you drag the PDF and click <strong>Send</strong> to <strong>${escapeHtml(inv.customerName)}</strong>?`
               : `En Messages, ¿arrastraste el PDF y le diste click a <strong>Send</strong> a <strong>${escapeHtml(inv.customerName)}</strong>?`}
           </p>
           <div style="display:flex;gap:8px;flex-direction:column;">
-            <button onclick="window.confirmSmsYes('${inv.id}', ${newHistory.length - 1})" style="background:#16A34A;color:white;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+            <button onclick="window.confirmSmsYes('${inv.id}', ${newHistory.length - 1})" style="background:#2E8B57;color:white;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
               ✅ ${en ? 'Yes — mark as sent' : 'Sí lo envié — marcar enviado'}
             </button>
             <button onclick="window.confirmSendNo()" style="background:#F1F5F9;color:#475569;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;">
@@ -5771,7 +5821,7 @@ window.askConfirmSendCustomer = function(invoiceId, stage) {
   overlay.innerHTML = `
     <div style="background:white;border-radius:16px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,0.3);">
       <div style="font-size:36px;text-align:center;margin-bottom:8px;">📤</div>
-      <h3 style="margin:0 0 12px 0;text-align:center;font-size:18px;color:#0F172A;">${en ? 'Did you send the email?' : '¿Enviaste el email?'}</h3>
+      <h3 style="margin:0 0 12px 0;text-align:center;font-size:18px;color:#134A63;">${en ? 'Did you send the email?' : '¿Enviaste el email?'}</h3>
       <p style="margin:0 0 20px 0;text-align:center;font-size:14px;color:#475569;line-height:1.5;">
         ${en
           ? `In Outlook, did you click <strong>Send</strong> on the email to <strong>${escapeHtml(inv.customerName)}</strong>?<br>(${stageLabel})`
@@ -5781,7 +5831,7 @@ window.askConfirmSendCustomer = function(invoiceId, stage) {
         ${en ? 'Verify it appears in Outlook → Sent Items' : 'Verifica que aparezca en Outlook → Sent Items'}
       </p>
       <div style="display:flex;gap:8px;flex-direction:column;">
-        <button onclick="window.confirmSendCustomerYes('${invoiceId}', ${stage})" style="background:#16A34A;color:white;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+        <button onclick="window.confirmSendCustomerYes('${invoiceId}', ${stage})" style="background:#2E8B57;color:white;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
           ✅ ${en ? 'Yes — mark invoice as sent' : 'Sí lo envié — marcar factura como enviada'}
         </button>
         <button onclick="window.confirmSendNo()" style="background:#F1F5F9;color:#475569;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;">
@@ -7073,10 +7123,10 @@ window.openPaymentModal = function(id) {
       let statusBadge, confirmBtn = '';
       if (ev.confirmed) {
         const confirmTime = ev.confirmedAt ? new Date(ev.confirmedAt).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'}) : '';
-        statusBadge = `<span style="background:#DCFCE7;color:#15803D;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;">✅ ${en ? 'SENT' : 'ENVIADO'}${confirmTime ? ' · ' + confirmTime : ''}</span>`;
+        statusBadge = `<span style="background:#DCFCE7;color:#2E8B57;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;">✅ ${en ? 'SENT' : 'ENVIADO'}${confirmTime ? ' · ' + confirmTime : ''}</span>`;
       } else {
         statusBadge = `<span style="background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;">⏰ ${en ? 'GENERATED — not confirmed' : 'GENERADO — sin confirmar'}</span>`;
-        confirmBtn = `<button onclick="window.confirmSendYesFromHistory('${inv.id}', ${histIdx})" style="margin-top:6px;background:#16A34A;color:white;border:0;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✅ ${en ? 'I sent it — mark as sent' : 'Sí lo envié — marcar enviado'}</button>`;
+        confirmBtn = `<button onclick="window.confirmSendYesFromHistory('${inv.id}', ${histIdx})" style="margin-top:6px;background:#2E8B57;color:white;border:0;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✅ ${en ? 'I sent it — mark as sent' : 'Sí lo envié — marcar enviado'}</button>`;
       }
       
       return `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
@@ -7797,14 +7847,14 @@ window.askConfirmSend = function(invoiceId, historyIndex) {
   overlay.innerHTML = `
     <div style="background:white;border-radius:16px;max-width:440px;width:100%;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,0.3);">
       <div style="font-size:36px;text-align:center;margin-bottom:8px;">📤</div>
-      <h3 style="margin:0 0 12px 0;text-align:center;font-size:18px;color:#0F172A;">${en ? 'Did you click Send?' : '¿Le diste click a Send?'}</h3>
+      <h3 style="margin:0 0 12px 0;text-align:center;font-size:18px;color:#134A63;">${en ? 'Did you click Send?' : '¿Le diste click a Send?'}</h3>
       <p style="margin:0 0 20px 0;text-align:center;font-size:14px;color:#475569;line-height:1.5;">
         ${en
           ? `In Outlook, did you actually click <strong>Send</strong> on the email to ${escapeHtml(recipient)}? Verify it appears in <strong>Sent Items</strong>.`
           : `En Outlook, ¿realmente le diste click a <strong>Send</strong> al correo para ${escapeHtml(recipient)}? Verifica que aparezca en <strong>Sent Items</strong>.`}
       </p>
       <div style="display:flex;gap:8px;flex-direction:column;">
-        <button onclick="window.confirmSendYes('${invoiceId}', ${historyIndex})" style="background:#16A34A;color:white;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+        <button onclick="window.confirmSendYes('${invoiceId}', ${historyIndex})" style="background:#2E8B57;color:white;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
           ✅ ${en ? 'Yes, I sent it (mark as sent)' : 'Sí lo envié (marcar como enviado)'}
         </button>
         <button onclick="window.confirmSendNo()" style="background:#F1F5F9;color:#475569;border:0;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;">
@@ -8289,13 +8339,13 @@ window.openCustomerDetail = async function(idOrName) {
     score = '—'; scoreColor = '#64748B'; scoreBg = '#F1F5F9';
     scoreNote = currentLang === 'en' ? 'no paid history' : 'sin historial pagado';
   } else if (avgDaysToPay <= 7 && ccCount === 0) {
-    score = 'A'; scoreColor = '#15803D'; scoreBg = '#DCFCE7';
+    score = 'A'; scoreColor = '#2E8B57'; scoreBg = '#DCFCE7';
     scoreNote = currentLang === 'en' ? 'fast payer' : 'paga rápido';
   } else if (avgDaysToPay <= 30 && ccCount <= 1) {
     score = 'B'; scoreColor = '#CA8A04'; scoreBg = '#FEF9C3';
     scoreNote = currentLang === 'en' ? 'average' : 'promedio';
   } else {
-    score = 'C'; scoreColor = '#B91C1C'; scoreBg = '#FEE2E2';
+    score = 'C'; scoreColor = '#C0492F'; scoreBg = '#FEE2E2';
     scoreNote = currentLang === 'en' ? 'slow / problematic' : 'lento / problemático';
   }
   
@@ -9730,8 +9780,8 @@ window.renderCrossAppStats = function(rangeDays) {
         <div style="font-size:26px;font-weight:700;color:#1e40af;">${avgHrs}h</div>
       </div>
       <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:11px 13px;">
-        <div style="font-size:10px;color:#15803D;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">${en ? 'Under 24h' : 'En 24h'}</div>
-        <div style="font-size:26px;font-weight:700;color:#15803D;">${under24Pct}%</div>
+        <div style="font-size:10px;color:#2E8B57;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">${en ? 'Under 24h' : 'En 24h'}</div>
+        <div style="font-size:26px;font-weight:700;color:#2E8B57;">${under24Pct}%</div>
       </div>
     </div>
 
@@ -10349,7 +10399,7 @@ function renderTicketsInDetail(tickets) {
             ${items.slice(0, 6).map(it => `
               <div class="cd-tk-items-row">
                 <span style="min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(it.name || it.n || '—')}${it.qty > 1 ? ` ×${it.qty}` : ''}</span>
-                <span style="font-family:'JetBrains Mono',monospace;color:var(--text);font-weight:600;">${fmtCurrency((Number(it.price) || 0) * (Number(it.qty) || 1))}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;color:var(--text);font-weight:600;">${fmtCurrency((Number(it.price) || 0) * (Number(it.qty) || 1))}</span>
               </div>`).join('')}
             ${items.length > 6 ? `<div style="font-size:11px;color:var(--text-mute);margin-top:4px;">+ ${items.length - 6} más</div>` : ''}
           </div>` : ''}
@@ -10685,8 +10735,8 @@ function showNotif(title, body, tag) {
   }
   const opts = {
     body,
-    icon: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%230f172a" rx="20"/%3E%3Ctext x="50" y="62" font-size="50" text-anchor="middle" fill="white"%3E📋%3C/text%3E%3C/svg%3E',
-    badge: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Ccircle cx="50" cy="50" r="40" fill="%23D4772C"/%3E%3C/svg%3E',
+    icon: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23134A63" rx="20"/%3E%3Ctext x="50" y="62" font-size="50" text-anchor="middle" fill="white"%3E📋%3C/text%3E%3C/svg%3E',
+    badge: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Ccircle cx="50" cy="50" r="40" fill="%23B5733A"/%3E%3C/svg%3E',
     tag: tag || 'invoice-tracker',
     requireInteraction: false,
     renotify: true
@@ -10717,7 +10767,7 @@ function fallbackNotif(title, body, tag) {
   try {
     const n = new Notification(title, {
       body,
-      icon: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%230f172a" rx="20"/%3E%3Ctext x="50" y="62" font-size="50" text-anchor="middle" fill="white"%3E📋%3C/text%3E%3C/svg%3E',
+      icon: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Crect width="100" height="100" fill="%23134A63" rx="20"/%3E%3Ctext x="50" y="62" font-size="50" text-anchor="middle" fill="white"%3E📋%3C/text%3E%3C/svg%3E',
       tag: tag || 'invoice-tracker',
       requireInteraction: false
     });
@@ -11063,7 +11113,7 @@ function renderInvoiceCardHtml(inv) {
       : (currentLang === 'en' ? 'Generated' : 'Generado');
     const stateIcon = isConfirmed ? '✅' : '⏰';
     const bg = isConfirmed ? '#DCFCE7' : '#FEF3C7';
-    const fg = isConfirmed ? '#15803D' : '#92400E';
+    const fg = isConfirmed ? '#2E8B57' : '#92400E';
     const border = isConfirmed ? '#86EFAC' : '#FDE047';
     const tooltip = currentLang === 'en'
       ? `${stateIcon} ${stateLabel} for ${recipient} at ${when.toLocaleString()}. ${alertEvents.length} alert(s) total. ${isConfirmed ? 'You confirmed Send was clicked.' : 'NOT confirmed sent yet — confirm in payment modal.'}`
@@ -11125,7 +11175,7 @@ function renderInvoiceCardHtml(inv) {
       <div class="invoice-main">
         <div class="invoice-title">
           <span class="invoice-num">#${escapeHtml(inv.invoiceNumber)}</span>
-          ${inv.pdfBase64 ? `<span onclick="event.stopPropagation();window.viewInvoicePdf('${inv.id}')" title="${escapeHtml(currentLang === 'en' ? 'PDF saved — click to view' : 'PDF guardado — click para ver')}" style="display:inline-flex;align-items:center;gap:3px;background:#DCFCE7;color:#15803D;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;cursor:pointer;border:1px solid #86EFAC;">📎 PDF</span>` : ''}
+          ${inv.pdfBase64 ? `<span onclick="event.stopPropagation();window.viewInvoicePdf('${inv.id}')" title="${escapeHtml(currentLang === 'en' ? 'PDF saved — click to view' : 'PDF guardado — click para ver')}" style="display:inline-flex;align-items:center;gap:3px;background:#DCFCE7;color:#2E8B57;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;cursor:pointer;border:1px solid #86EFAC;">📎 PDF</span>` : ''}
           <span class="invoice-customer clickable" onclick="window.openCustomerDetail('${escapeHtml(inv.customerName).replace(/'/g, "\\'")}')">${escapeHtml(inv.customerName)}</span>
           <span class="status-badge ${s}">${statusLabel(s)}</span>
           ${payPill}
@@ -11152,7 +11202,7 @@ function renderInvoiceCardHtml(inv) {
         ${s === 'sent' || s === 'followup' ? `<button class="btn btn-success btn-sm" onclick="window.markAsPaid('${inv.id}')">${escapeHtml(t('card.markPaid'))}</button>` : ''}
         ${s === 'sent' || s === 'followup' ? `<button class="btn btn-secondary btn-sm" onclick="window.openSendModal('${inv.id}')">${escapeHtml(t('card.resend'))}</button>` : ''}
         ${s === 'paid' ? `<button class="btn btn-secondary btn-sm" onclick="window.openSendModal('${inv.id}')" title="${escapeHtml(currentLang === 'en' ? 'Send receipt / resend invoice / send any email to this customer' : 'Mandar recibo / reenviar factura / mandar cualquier email a este cliente')}">📩 ${escapeHtml(currentLang === 'en' ? 'Send' : 'Enviar')}</button>` : ''}
-        ${(s === 'paid' && !inv.qbSynced) ? `<button class="btn btn-sm" onclick="event.stopPropagation();window.markQbSynced('${inv.id}')" title="${escapeHtml(currentLang === 'en' ? 'Mark this invoice as entered in QuickBooks Desktop (removes from QB Pending tab)' : 'Marcar esta factura como entrada en QuickBooks Desktop (sale de QB Pending)')}" style="background:#2563EB;color:#fff;border:none;font-weight:700;">✅ QB</button>` : ''}
+        ${(s === 'paid' && !inv.qbSynced) ? `<button class="btn btn-sm" onclick="event.stopPropagation();window.markQbSynced('${inv.id}')" title="${escapeHtml(currentLang === 'en' ? 'Mark this invoice as entered in QuickBooks Desktop (removes from QB Pending tab)' : 'Marcar esta factura como entrada en QuickBooks Desktop (sale de QB Pending)')}" style="background:#1C8FA8;color:#fff;border:none;font-weight:700;">✅ QB</button>` : ''}
         <button class="btn btn-ghost btn-sm" onclick="window.openPaymentModal('${inv.id}')" title="${escapeHtml(t('card.payment.title'))}">💳</button>
         ${(() => {
           // Cross-app alert button — shown when invoice has a payment problem the tech team should know about
@@ -11178,7 +11228,7 @@ function renderInvoiceCardHtml(inv) {
             const by = lastResolved.resolvedBy ? ' · ' + lastResolved.resolvedBy : '';
             const en = currentLang === 'en';
             const title = (en ? 'Tech team resolved this alert' : 'Tech team resolvió esta alerta') + by;
-            return `<button class="btn btn-sm" onclick="window.openCrossAppAlertModal('${inv.id}')" title="${escapeHtml(title)}" style="background:#DCFCE7;color:#15803D;border:1px solid #86EFAC;font-weight:600;">✓ ${escapeHtml(en ? 'Tech ack' : 'Tech ack')}</button>`;
+            return `<button class="btn btn-sm" onclick="window.openCrossAppAlertModal('${inv.id}')" title="${escapeHtml(title)}" style="background:#DCFCE7;color:#2E8B57;border:1px solid #86EFAC;font-weight:600;">✓ ${escapeHtml(en ? 'Tech ack' : 'Tech ack')}</button>`;
           }
           const title = currentLang === 'en'
             ? (alreadyAlerted ? 'Tech team already notified — click to re-send' : 'Notify Tech Team about this payment issue')
@@ -11341,22 +11391,22 @@ function renderSentTodayView() {
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;">
       <div style="background:#DBEAFE;border:1px solid #93C5FD;border-radius:var(--r-md);padding:12px;">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#1E40AF;">${en ? 'Customer emails' : 'Emails a clientes'}</div>
-        <div style="font-size:24px;font-weight:800;color:#0F172A;margin-top:4px;">${totalCustomerSends}</div>
+        <div style="font-size:24px;font-weight:800;color:#134A63;margin-top:4px;">${totalCustomerSends}</div>
         <div style="font-size:11px;color:#475569;margin-top:2px;">${fmtCurrency(totalCustomerAmount)} ${en ? 'invoiced' : 'facturado'}</div>
       </div>
       <div style="background:#DCFCE7;border:1px solid #86EFAC;border-radius:var(--r-md);padding:12px;">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#15803D;">${en ? 'Internal alerts ✓' : 'Alertas internas ✓'}</div>
-        <div style="font-size:24px;font-weight:800;color:#0F172A;margin-top:4px;">${totalAlerts}</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#2E8B57;">${en ? 'Internal alerts ✓' : 'Alertas internas ✓'}</div>
+        <div style="font-size:24px;font-weight:800;color:#134A63;margin-top:4px;">${totalAlerts}</div>
         <div style="font-size:11px;color:#475569;margin-top:2px;">${en ? 'confirmed sent' : 'confirmadas enviadas'}</div>
       </div>
       <div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:var(--r-md);padding:12px;">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#854D0E;">${en ? 'Checks tracked' : 'Cheques en tracking'}</div>
-        <div style="font-size:24px;font-weight:800;color:#0F172A;margin-top:4px;">${fmtCurrency(totalChecksTracked)}</div>
+        <div style="font-size:24px;font-weight:800;color:#134A63;margin-top:4px;">${fmtCurrency(totalChecksTracked)}</div>
         <div style="font-size:11px;color:#475569;margin-top:2px;">${internalAlerts.filter(a => a.action === 'alert_check').length} ${en ? 'checks' : 'cheques'}</div>
       </div>
       <div style="background:${pendingConfirmAlerts.length > 0 ? '#FEE2E2' : '#F1F5F9'};border:1px solid ${pendingConfirmAlerts.length > 0 ? '#FCA5A5' : 'var(--border)'};border-radius:var(--r-md);padding:12px;">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:${pendingConfirmAlerts.length > 0 ? '#991B1B' : 'var(--text-soft)'};">${en ? 'Pending confirm' : 'Sin confirmar'}</div>
-        <div style="font-size:24px;font-weight:800;color:#0F172A;margin-top:4px;">${pendingConfirmAlerts.length}</div>
+        <div style="font-size:24px;font-weight:800;color:#134A63;margin-top:4px;">${pendingConfirmAlerts.length}</div>
         <div style="font-size:11px;color:#475569;margin-top:2px;">${en ? 'generated, not confirmed' : 'generadas sin confirmar'}</div>
       </div>
     </div>`;
@@ -11393,7 +11443,7 @@ function renderSentTodayView() {
           <div style="font-weight:600;font-size:13px;">#${escapeHtml(inv.invoiceNumber)} ${escapeHtml(inv.customerName)} · ✅</div>
           <div style="font-size:11px;color:var(--text-mute);">${detail} → ${escapeHtml(ev.data.recipientName || '')}</div>
         </div>
-        <div style="font-size:13px;font-weight:700;color:#15803D;">${fmtCurrency(inv.amount)}</div>
+        <div style="font-size:13px;font-weight:700;color:#2E8B57;">${fmtCurrency(inv.amount)}</div>
         <div style="font-size:11px;color:var(--text-mute);min-width:60px;text-align:right;">${time}</div>
       </div>`;
     }
@@ -11715,25 +11765,25 @@ function renderTechsView() {
         </div>
       </div>
       <div style="height:6px;background:#F1F5F9;border-radius:3px;overflow:hidden;margin-bottom:10px;">
-        <div style="height:100%;width:${barPct}%;background:linear-gradient(90deg,#15803D,#22C55E);border-radius:3px;"></div>
+        <div style="height:100%;width:${barPct}%;background:linear-gradient(90deg,#2E8B57,#2E8B57);border-radius:3px;"></div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:11px;">
         <div style="background:#DCFCE7;padding:6px 10px;border-radius:6px;">
-          <div style="color:#15803D;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.06em;">${en ? 'Collected' : 'Cobrado'}</div>
-          <div style="font-size:13px;font-weight:700;color:#0F172A;">${fmtCurrency(t.totalCollected)}</div>
-          <div style="font-size:10px;color:#15803D;">${collectionRate}% ${en ? 'rate' : 'tasa'}</div>
+          <div style="color:#2E8B57;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.06em;">${en ? 'Collected' : 'Cobrado'}</div>
+          <div style="font-size:13px;font-weight:700;color:#134A63;">${fmtCurrency(t.totalCollected)}</div>
+          <div style="font-size:10px;color:#2E8B57;">${collectionRate}% ${en ? 'rate' : 'tasa'}</div>
         </div>
         <div style="background:#FEF9C3;padding:6px 10px;border-radius:6px;">
           <div style="color:#854D0E;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.06em;">${en ? 'Pending' : 'Pendiente'}</div>
-          <div style="font-size:13px;font-weight:700;color:#0F172A;">${fmtCurrency(t.totalPending)}</div>
+          <div style="font-size:13px;font-weight:700;color:#134A63;">${fmtCurrency(t.totalPending)}</div>
         </div>
         <div style="background:${t.ccIssues > 0 ? '#FEE2E2' : '#F1F5F9'};padding:6px 10px;border-radius:6px;">
           <div style="color:${t.ccIssues > 0 ? '#991B1B' : '#475569'};font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.06em;">${en ? 'CC Issues' : 'Alertas CC'}</div>
-          <div style="font-size:13px;font-weight:700;color:#0F172A;">${t.ccIssues}</div>
+          <div style="font-size:13px;font-weight:700;color:#134A63;">${t.ccIssues}</div>
         </div>
         <div style="background:#DBEAFE;padding:6px 10px;border-radius:6px;">
           <div style="color:#1E40AF;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.06em;">${en ? 'Avg pay' : 'Pago prom'}</div>
-          <div style="font-size:13px;font-weight:700;color:#0F172A;">${t.paidCount > 0 ? t.avgDaysToPay + 'd' : '—'}</div>
+          <div style="font-size:13px;font-weight:700;color:#134A63;">${t.paidCount > 0 ? t.avgDaysToPay + 'd' : '—'}</div>
         </div>
       </div>
     </div>`;
@@ -11814,7 +11864,7 @@ function renderTodayRevenue() {
   chart.innerHTML = dayBuckets.map((d, i) => {
     const heightPct = Math.max((d.total / maxDay) * 100, 2);
     const isToday = i === 6;
-    const bg = isToday ? '#22C55E' : (d.total > 0 ? '#94A3B8' : '#475569');
+    const bg = isToday ? '#2E8B57' : (d.total > 0 ? '#94A3B8' : '#475569');
     const tooltip = `${d.label}: ${fmtCurrency(d.total)} (${d.count})`;
     return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;" title="${escapeHtml(tooltip)}">
       <div style="width:100%;height:32px;display:flex;align-items:flex-end;">
@@ -11888,7 +11938,7 @@ window.toggleBulkMode = function() {
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'bulkActionBar';
-      bar.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0F172A;color:white;padding:14px 20px;border-radius:14px;display:flex;align-items:center;gap:14px;z-index:999;box-shadow:0 12px 40px rgba(0,0,0,0.35);';
+      bar.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#134A63;color:white;padding:14px 20px;border-radius:14px;display:flex;align-items:center;gap:14px;z-index:999;box-shadow:0 12px 40px rgba(0,0,0,0.35);';
       document.body.appendChild(bar);
     }
     updateBulkBar();
@@ -11910,7 +11960,7 @@ function updateBulkBar() {
   const en = currentLang === 'en';
   bar.innerHTML = `
     <div style="font-size:14px;font-weight:600;">${count} ${en ? 'selected' : 'seleccionadas'}</div>
-    <button onclick="bulkGenerateEml()" ${count === 0 ? 'disabled' : ''} style="background:#22C55E;color:white;border:0;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:${count === 0 ? 'not-allowed' : 'pointer'};opacity:${count === 0 ? '0.5' : '1'};">📎 ${en ? 'Generate ' : 'Generar '}${count} .eml</button>
+    <button onclick="bulkGenerateEml()" ${count === 0 ? 'disabled' : ''} style="background:#2E8B57;color:white;border:0;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:${count === 0 ? 'not-allowed' : 'pointer'};opacity:${count === 0 ? '0.5' : '1'};">📎 ${en ? 'Generate ' : 'Generar '}${count} .eml</button>
     <button onclick="toggleBulkMode()" style="background:#475569;color:white;border:0;padding:10px 14px;border-radius:8px;font-size:13px;cursor:pointer;">${en ? 'Cancel' : 'Cancelar'}</button>`;
 }
 
@@ -12164,6 +12214,26 @@ if (localStorage.getItem('aspenNotifEnabled') === '1' && 'Notification' in windo
   });
 }
 updateNotifButton();
+
+// ═══ ASPEN OPS — water ripple on button clicks ═══
+document.addEventListener('click', function(e){
+  const host = e.target.closest('button, .btn, [role=button]');
+  if(!host) return;
+  const cs = getComputedStyle(host);
+  if(cs.position === 'static') host.style.position = 'relative';
+  if(cs.overflow !== 'hidden') host.style.overflow = 'hidden';
+  try{
+    const rect = host.getBoundingClientRect();
+    const wave = document.createElement('span');
+    wave.className = 'ops-ripple-wave';
+    const size = Math.max(rect.width, rect.height) * 2.2;
+    wave.style.width = wave.style.height = size + 'px';
+    wave.style.left = (e.clientX - rect.left) + 'px';
+    wave.style.top  = (e.clientY - rect.top) + 'px';
+    host.appendChild(wave);
+    setTimeout(()=>wave.remove(), 750);
+  }catch(err){}
+}, {passive:true});
 </script>
 
 </body>
